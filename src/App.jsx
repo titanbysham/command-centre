@@ -456,13 +456,13 @@ export default function App() {
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement("canvas");
-        const MAX = 400;
+        const MAX = 1200;
         let w = img.width, h = img.height;
         if (w > h) { if (w > MAX) { h = h * MAX / w; w = MAX; } }
         else { if (h > MAX) { w = w * MAX / h; h = MAX; } }
         canvas.width = w; canvas.height = h;
         canvas.getContext("2d").drawImage(img, 0, 0, w, h);
-        callback(canvas.toDataURL("image/jpeg", 0.6));
+        callback(canvas.toDataURL("image/jpeg", 0.9));
       };
       img.src = ev.target.result;
     };
@@ -665,7 +665,7 @@ export default function App() {
                       {sheetItem.attachments.images?.length > 0 && (
                         <div style={{ marginTop: 12 }}>
                           <div style={S.viewSecTitle}>📷 Pictures</div>
-                          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 6 }}>
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 6 }}>
                             {sheetItem.attachments.images.map((img, i) => (
                               <div key={i} style={{ position: "relative" }}>
                                 <img src={img.src} onClick={() => setFullImg(img.src)} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8, cursor: "pointer" }} />
@@ -947,3 +947,4 @@ const styles = {
   noteCard: { background: "#f9f9f9", borderRadius: 8, padding: "10px 12px", fontSize: 13, color: "#111", lineHeight: 1.5 },
   delBtn: { position: "absolute", top: 6, right: 6, width: 18, height: 18, borderRadius: "50%", background: "#FCEBEB", border: "none", cursor: "pointer", fontSize: 10, color: "#A32D2D" },
 };
+ 
