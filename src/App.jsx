@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
- 
+
 const SUPABASE_URL = "https://ucxbwnjbktfzncqxevpa.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVjeGJ3bmpia3Rmem5jcXhldnBhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyMjkyNDMsImV4cCI6MjA5NTgwNTI0M30.xm9ARh3MfSnI03s9zyEyWqE0wKCa3iRRqRjCCehxN0c";
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 const DB_ID = 1;
- 
+
 const initialTasks = [
   {
     id: "t1", num: 1, name: "Water the flower", status: "done", done: true, open: true,
@@ -50,7 +50,7 @@ const initialTasks = [
   },
   { id: "t4", num: 4, name: "Reply to client WhatsApp", status: "", done: false, open: false, attachments: { notes: [], links: [], images: [] }, subs: [] },
 ];
- 
+
 function renumberAll(tasks) {
   tasks.forEach((t, i) => {
     t.num = i + 1;
@@ -60,7 +60,7 @@ function renumberAll(tasks) {
     });
   });
 }
- 
+
 function getItem(tasks, id) {
   for (const t of tasks) {
     if (t.id === id) return t;
@@ -71,20 +71,20 @@ function getItem(tasks, id) {
   }
   return null;
 }
- 
+
 function countAtt(item) {
   if (!item) return 0;
   const a = item.attachments;
   return a.notes.length + a.links.length + a.images.length;
 }
- 
+
 function Pill({ status, done }) {
   if (done) return <span style={{ background: "#E1F5EE", color: "#085041", fontSize: 9, padding: "2px 7px", borderRadius: 20, fontWeight: 600 }}>Done</span>;
   if (status === "ongoing") return <span style={{ background: "#E6F1FB", color: "#185FA5", fontSize: 9, padding: "2px 7px", borderRadius: 20, fontWeight: 600 }}>Ongoing</span>;
   if (status === "blocked") return <span style={{ background: "#FCEBEB", color: "#A32D2D", fontSize: 9, padding: "2px 7px", borderRadius: 20, fontWeight: 600 }}>Blocked</span>;
   return null;
 }
- 
+
 // ─── SWIPE ROW ────────────────────────────────────────────────────────────────
 // Handles BOTH swipe left (delete) and swipe right (edit)
 // The key fix: touchAction on the swipeable div must be "none" so we control all touch
@@ -92,12 +92,12 @@ function SwipeRow({ children, onSwipeLeft, onSwipeRight, borderRadius = 12 }) {
   const ref = useRef(null);
   const state = useRef({ startX: 0, startY: 0, dx: 0, active: false, dir: null });
   const THRESHOLD = 55;
- 
+
   const start = (x, y) => {
     state.current = { startX: x, startY: y, dx: 0, active: true, dir: null };
     if (ref.current) ref.current.style.transition = "none";
   };
- 
+
   const move = (x, y, e) => {
     const s = state.current;
     if (!s.active) return;
@@ -112,7 +112,7 @@ function SwipeRow({ children, onSwipeLeft, onSwipeRight, borderRadius = 12 }) {
     s.dx = dx;
     if (ref.current) ref.current.style.transform = `translateX(${dx}px)`;
   };
- 
+
   const end = () => {
     const s = state.current;
     s.active = false;
@@ -130,7 +130,7 @@ function SwipeRow({ children, onSwipeLeft, onSwipeRight, borderRadius = 12 }) {
       if (ref.current) ref.current.style.transform = "translateX(0)";
     }
   };
- 
+
   return (
     <div style={{ position: "relative", overflow: "hidden", borderRadius }}>
       {/* red bg right */}
@@ -150,13 +150,13 @@ function SwipeRow({ children, onSwipeLeft, onSwipeRight, borderRadius = 12 }) {
     </div>
   );
 }
- 
+
 // ─── DRAG GRIP ────────────────────────────────────────────────────────────────
 // Touch-based reorder — press & hold grip, drag up/down
 function DragGrip({ style, onReorder, listRef, idx }) {
   const dragState = useRef(null);
   const cloneRef = useRef(null);
- 
+
   const onTouchStart = (e) => {
     e.stopPropagation();
     const touch = e.touches[0];
@@ -172,7 +172,7 @@ function DragGrip({ style, onReorder, listRef, idx }) {
     cloneRef.current = clone;
     el.style.opacity = "0.3";
   };
- 
+
   const onTouchMove = (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -200,7 +200,7 @@ function DragGrip({ style, onReorder, listRef, idx }) {
       ds.toIdx = newTo;
     }
   };
- 
+
   const onTouchEnd = (e) => {
     e.stopPropagation();
     const ds = dragState.current;
@@ -213,7 +213,7 @@ function DragGrip({ style, onReorder, listRef, idx }) {
     }
     if (ds.fromIdx !== ds.toIdx) onReorder(ds.fromIdx, ds.toIdx);
   };
- 
+
   return (
     <div data-grip="true" style={{ ...style, touchAction: "none", userSelect: "none" }}
       onTouchStart={onTouchStart}
@@ -221,7 +221,7 @@ function DragGrip({ style, onReorder, listRef, idx }) {
       onTouchEnd={onTouchEnd}>⠿</div>
   );
 }
- 
+
 // ─── TOAST ───────────────────────────────────────────────────────────────────
 function Toast({ toast, onUndo, onDelete }) {
   return (
@@ -238,7 +238,7 @@ function Toast({ toast, onUndo, onDelete }) {
     </>
   );
 }
- 
+
 function Modal({ show, title, value, onChange, onConfirm, onCancel, confirmLabel, confirmColor, placeholder }) {
   return (
     <>
@@ -257,7 +257,7 @@ function Modal({ show, title, value, onChange, onConfirm, onCancel, confirmLabel
     </>
   );
 }
- 
+
 function BulbBtn({ count, onClick, size }) {
   return (
     <button onClick={onClick} style={{ width: size, height: size, borderRadius: "50%", border: count > 0 ? "0.5px solid #E5A832" : "0.5px solid #ddd", background: count > 0 ? "#FAEEDA" : "#f5f5f5", fontSize: size * 0.5, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginLeft: 6, position: "relative" }}>
@@ -266,7 +266,7 @@ function BulbBtn({ count, onClick, size }) {
     </button>
   );
 }
- 
+
 function SheetOption({ icon, title, sub, color, onClick }) {
   return (
     <div onClick={onClick} style={{ display: "flex", alignItems: "center", gap: 12, padding: 14, borderRadius: 12, border: "0.5px solid #eee", background: "#fafafa", cursor: "pointer" }}>
@@ -276,7 +276,7 @@ function SheetOption({ icon, title, sub, color, onClick }) {
     </div>
   );
 }
- 
+
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function App() {
   const [tasks, setTasks] = useState(initialTasks);
@@ -295,12 +295,12 @@ export default function App() {
   const galleryRef = useRef(null);
   const modalCameraRef = useRef(null);
   const modalGalleryRef = useRef(null);
- 
+
   // drag list refs — stable, not recreated on render
   const taskListRef = useRef([]);
   const subListRefs = useRef({});   // keyed by taskId
   const ssubListRefs = useRef({});  // keyed by subId
- 
+
   const getSubListRef = (taskId) => {
     if (!subListRefs.current[taskId]) subListRefs.current[taskId] = [];
     return subListRefs.current[taskId];
@@ -309,32 +309,52 @@ export default function App() {
     if (!ssubListRefs.current[subId]) ssubListRefs.current[subId] = [];
     return ssubListRefs.current[subId];
   };
- 
+
   const update = fn => setTasks(prev => { const next = JSON.parse(JSON.stringify(prev)); fn(next); return next; });
- 
-  // Load tasks from Supabase on first open
+
+  // Load tasks — try Supabase first, fall back to localStorage if offline
   useEffect(() => {
     const load = async () => {
       try {
         const { data, error } = await supabase.from("tasks").select("data").eq("id", DB_ID).single();
-        if (data && data.data) setTasks(JSON.parse(data.data));
-      } catch (e) { console.log("Load error", e); }
+        if (data && data.data) {
+          const parsed = JSON.parse(data.data);
+          setTasks(parsed);
+          // also save to localStorage as backup
+          localStorage.setItem("command_centre_tasks", data.data);
+        } else {
+          // no data in supabase — check localStorage
+          const local = localStorage.getItem("command_centre_tasks");
+          if (local) setTasks(JSON.parse(local));
+        }
+      } catch (e) {
+        // offline — load from localStorage
+        const local = localStorage.getItem("command_centre_tasks");
+        if (local) setTasks(JSON.parse(local));
+      }
       setLoading(false);
     };
     load();
   }, []);
- 
-  // Save tasks to Supabase whenever they change
+
+  // Save tasks — always save to localStorage immediately, try Supabase if online
   useEffect(() => {
     if (loading) return;
+    const tasksJson = JSON.stringify(tasks);
+    // always save locally first
+    localStorage.setItem("command_centre_tasks", tasksJson);
+    // try to sync to Supabase
     const save = async () => {
       try {
-        await supabase.from("tasks").upsert({ id: DB_ID, data: JSON.stringify(tasks) });
-      } catch (e) { console.log("Save error", e); }
+        await supabase.from("tasks").upsert({ id: DB_ID, data: tasksJson });
+      } catch (e) {
+        // offline — already saved to localStorage above, will sync next time online
+        console.log("Offline — saved locally only");
+      }
     };
     save();
   }, [tasks]);
- 
+
   const toggleTask = id => update(t => { const x = t.find(x => x.id === id); if (x) x.open = !x.open; });
   const toggleSub = (tid, sid) => update(t => { const s = t.find(x => x.id === tid)?.subs.find(x => x.id === sid); if (s) s.open = !s.open; });
   const toggleDone = (type, tid, sid, ssid) => update(t => {
@@ -343,12 +363,12 @@ export default function App() {
     else if (type === "sub") { const s = task?.subs.find(x => x.id === sid); if (s) s.done = !s.done; }
     else if (type === "ssub") { const ss = task?.subs.find(x => x.id === sid)?.ssubs.find(x => x.id === ssid); if (ss) ss.done = !ss.done; }
   });
- 
+
   // reorder helpers
   const reorderTasks = (from, to) => update(t => { const [m] = t.splice(from, 1); t.splice(to, 0, m); renumberAll(t); });
   const reorderSubs = (taskId, from, to) => update(t => { const task = t.find(x => x.id === taskId); if (!task) return; const [m] = task.subs.splice(from, 1); task.subs.splice(to, 0, m); renumberAll(t); });
   const reorderSSubs = (taskId, subId, from, to) => update(t => { const sub = t.find(x => x.id === taskId)?.subs.find(x => x.id === subId); if (!sub) return; const [m] = sub.ssubs.splice(from, 1); sub.ssubs.splice(to, 0, m); renumberAll(t); });
- 
+
   // add modal
   const openAddModal = (type, taskId = null, subId = null) => {
     if (type === "sub") update(t => { const task = t.find(x => x.id === taskId); if (task) task.open = true; });
@@ -369,7 +389,7 @@ export default function App() {
     });
     setAddModal(m => ({ ...m, show: false, value: "", url: "", images: [], showPicOpts: false }));
   };
- 
+
   // edit modal
   const openEditModal = (id, name) => setEditModal({ show: true, id, value: name });
   const confirmEdit = () => {
@@ -377,7 +397,7 @@ export default function App() {
     update(t => { const item = getItem(t, editModal.id); if (item) item.name = name; });
     setEditModal({ show: false, id: null, value: "" });
   };
- 
+
   // delete
   const handleSwipeLeft = (id, name, resetFn) => {
     clearTimeout(toastTimer.current);
@@ -402,7 +422,7 @@ export default function App() {
       }
     });
   };
- 
+
   // attachments
   const handleImageFiles = files => { Array.from(files).forEach(f => { const r = new FileReader(); r.onload = ev => setImages(prev => [...prev, { src: ev.target.result }]); r.readAsDataURL(f); }); };
   const handleModalImageFiles = files => { Array.from(files).forEach(f => { const r = new FileReader(); r.onload = ev => setAddModal(m => ({ ...m, images: [...m.images, { src: ev.target.result }] })); r.readAsDataURL(f); }); };
@@ -418,22 +438,22 @@ export default function App() {
     setSheet({ itemId, view: "view" });
   };
   const deleteAtt = (itemId, type, idx) => update(t => { const item = getItem(t, itemId); if (item) item.attachments[type].splice(idx, 1); });
- 
+
   const totalTasks = tasks.length;
   const doneTasks = tasks.filter(t => t.done).length;
   const pct = totalTasks ? Math.round(doneTasks / totalTasks * 100) : 0;
   const sheetItem = sheet ? getItem(tasks, sheet.itemId) : null;
   const attCount = sheetItem ? countAtt(sheetItem) : 0;
   const S = styles;
- 
+
   if (loading) return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: "#f5f5f5", flexDirection: "column", gap: 16, fontFamily: "'DM Sans',sans-serif" }}>
       <div style={{ fontSize: 40 }}>⚡</div>
       <div style={{ fontSize: 16, fontWeight: 600, color: "#111" }}>Loading your tasks...</div>
-      <div style={{ fontSize: 13, color: "#aaa" }}>Connecting to database</div>
+      <div style={{ fontSize: 13, color: "#aaa" }}>{navigator.onLine ? "Connecting to database" : "Loading offline data"}</div>
     </div>
   );
- 
+
   return (
     <div style={S.page}>
       {/* TOPBAR */}
@@ -444,32 +464,32 @@ export default function App() {
           <button style={S.iconBtn}>⚙️</button>
         </div>
       </div>
- 
+
       {/* STATS */}
       <div style={S.statsRow}>
         <div style={S.statCard}><div style={{ ...S.statNum, color: "#185FA5" }}>{totalTasks}</div><div style={S.statLabel}>Total</div></div>
         <div style={S.statCard}><div style={{ ...S.statNum, color: "#1D9E75" }}>{doneTasks}</div><div style={S.statLabel}>Done</div></div>
         <div style={S.statCard}><div style={{ ...S.statNum, color: "#BA7517" }}>{pct}%</div><div style={S.statLabel}>Progress</div></div>
       </div>
- 
+
       {/* SECTION HEADER */}
       <div style={S.sectionHeader}>
         <span style={S.sectionLabel}>TASKS</span>
         <button style={S.addHeaderBtn} onClick={() => openAddModal("task")}>+ Add task</button>
       </div>
- 
+
       {/* TASK LIST */}
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {tasks.map((task, ti) => {
           const hasSubs = task.subs.length > 0;
           const doneSubs = task.subs.filter(s => s.done).length;
           const subListRef = { current: getSubListRef(task.id) };
- 
+
           return (
             <div key={task.id}
               ref={el => taskListRef.current[ti] = el}
               style={{ borderRadius: 12, overflow: "hidden", border: "0.5px solid #eee" }}>
- 
+
               <SwipeRow borderRadius={0}
                 onSwipeLeft={resetFn => handleSwipeLeft(task.id, task.name, resetFn)}
                 onSwipeRight={() => openEditModal(task.id, task.name)}>
@@ -491,13 +511,13 @@ export default function App() {
                   </div>
                 </div>
               </SwipeRow>
- 
+
               {task.open && (
                 <div style={{ ...S.subList, background: "#fff" }}>
                   {task.subs.map((sub, si) => {
                     const hasSSubs = sub.ssubs.length > 0;
                     const ssubListRef = { current: getSSubListRef(sub.id) };
- 
+
                     return (
                       <div key={sub.id} ref={el => { const arr = getSubListRef(task.id); arr[si] = el; }}>
                         <SwipeRow borderRadius={8}
@@ -514,7 +534,7 @@ export default function App() {
                             <BulbBtn count={countAtt(sub)} onClick={() => setSheet({ itemId: sub.id, view: "menu" })} size={24} />
                           </div>
                         </SwipeRow>
- 
+
                         {sub.open && (
                           <div style={S.ssubList}>
                             {sub.ssubs.map((ss, ssi) => (
@@ -546,7 +566,7 @@ export default function App() {
         })}
         <button style={S.mainAddBtn} onClick={() => openAddModal("task")}>+ Add task</button>
       </div>
- 
+
       {/* BULB SHEET */}
       {sheet && (
         <div style={S.overlay} onClick={() => { setSheet(null); setShowPicOptions(false); setImages([]); }}>
@@ -647,10 +667,10 @@ export default function App() {
           </div>
         </div>
       )}
- 
+
       {/* DELETE TOAST */}
       <Toast toast={toast} onUndo={handleUndo} onDelete={handleDelete} />
- 
+
       {/* FULLSCREEN IMAGE */}
       {fullImg && (
         <div onClick={() => setFullImg(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.95)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column" }}>
@@ -659,7 +679,7 @@ export default function App() {
           <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 12, marginTop: 16 }}>Tap anywhere to close</div>
         </div>
       )}
- 
+
       {/* ADD MODAL */}
       {addModal.show && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 998 }} onClick={() => setAddModal(m => ({ ...m, show: false }))}>
@@ -710,13 +730,13 @@ export default function App() {
           </div>
         </div>
       )}
- 
+
       {/* EDIT MODAL */}
       <Modal show={editModal.show} title="✏️ Edit" value={editModal.value} onChange={v => setEditModal(m => ({ ...m, value: v }))} onConfirm={confirmEdit} onCancel={() => setEditModal({ show: false, id: null, value: "" })} confirmLabel="✓ Save Changes" confirmColor="#1D9E75" placeholder="Edit name..." />
     </div>
   );
 }
- 
+
 const styles = {
   page: { background: "#f5f5f5", minHeight: "100vh", padding: "16px 12px", maxWidth: "100%", margin: 0, fontFamily: "'DM Sans',sans-serif" },
   topbar: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 },
