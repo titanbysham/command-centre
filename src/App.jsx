@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
  
 const initialTasks = [
   {
@@ -80,7 +80,84 @@ function Pill({ status, done }) {
   return null;
 }
  
-// SwipeRow — left = delete, right = edit
+// Touch-friendly drag hook
+function useListDrag(items, onReorder) {
+  const dragIdx = useRef(null);
+  const dragEl = useRef(null);
+  const cloneEl = useRef(null);
+  const offsetY = useRef(0);
+  const itemEls = useRef([]);
+ 
+  const onGripTouchStart = (e, idx) => {
+    e.stopPropagation();
+    const touch = e.touches[0];
+    dragIdx.current = idx;
+    const el = itemEls.current[idx];
+    if (!el) return;
+    dragEl.current = el;
+    const rect = el.getBoundingClientRect();
+    offsetY.current = touch.clientY - rect.top;
+    // create floating clone
+    const clone = el.cloneNode(true);
+    clone.style.cssText = `position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;opacity:0.85;z-index:9999;pointer-events:none;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.2);transition:none;`;
+    document.body.appendChild(clone);
+    cloneEl.current = clone;
+    el.style.opacity = "0.3";
+  };
+ 
+  const onGripTouchMove = (e) => {
+    e.preventDefault();
+    if (dragIdx.current === null || !cloneEl.current) return;
+    const touch = e.touches[0];
+    const y = touch.clientY - offsetY.current;
+    cloneEl.current.style.top = `${y}px`;
+    // find which item we're hovering over
+    let newIdx = dragIdx.current;
+    itemEls.current.forEach((el, i) => {
+      if (!el || i === dragIdx.current) return;
+      const rect = el.getBoundingClientRect();
+      const mid = rect.top + rect.height / 2;
+      if (touch.clientY < mid && i < dragIdx.current) newIdx = i;
+      if (touch.clientY > mid && i > dragIdx.current) newIdx = i;
+    });
+    if (newIdx !== dragIdx.current) {
+      // visual feedback
+      itemEls.current.forEach((el, i) => {
+        if (!el) return;
+        el.style.transform = "";
+        el.style.opacity = i === dragIdx.current ? "0.3" : "1";
+      });
+      if (itemEls.current[newIdx]) {
+        itemEls.current[newIdx].style.borderTop = newIdx < dragIdx.current ? "2px solid #185FA5" : "";
+        itemEls.current[newIdx].style.borderBottom = newIdx > dragIdx.current ? "2px solid #185FA5" : "";
+      }
+    }
+  };
+ 
+  const onGripTouchEnd = (e) => {
+    if (dragIdx.current === null) return;
+    const touch = e.changedTouches[0];
+    // cleanup clone
+    if (cloneEl.current) { cloneEl.current.remove(); cloneEl.current = null; }
+    if (dragEl.current) { dragEl.current.style.opacity = "1"; dragEl.current = null; }
+    // reset borders
+    itemEls.current.forEach(el => { if (el) { el.style.borderTop = ""; el.style.borderBottom = ""; el.style.opacity = "1"; } });
+    // find drop target
+    let toIdx = dragIdx.current;
+    itemEls.current.forEach((el, i) => {
+      if (!el || i === dragIdx.current) return;
+      const rect = el.getBoundingClientRect();
+      if (touch.clientY >= rect.top && touch.clientY <= rect.bottom) toIdx = i;
+    });
+    const from = dragIdx.current;
+    dragIdx.current = null;
+    if (from !== toIdx) onReorder(from, toIdx);
+  };
+ 
+  return { itemEls, onGripTouchStart, onGripTouchMove, onGripTouchEnd };
+}
+ 
+// SwipeRow — left=delete, right=edit
 function SwipeRow({ children, onSwipeLeft, onSwipeRight, borderRadius = 12 }) {
   const startX = useRef(0);
   const startY = useRef(0);
@@ -91,7 +168,7 @@ function SwipeRow({ children, onSwipeLeft, onSwipeRight, borderRadius = 12 }) {
   const THRESHOLD = 55;
  
   const onStart = (x, y, e) => {
-    if (e.target.closest("button")) return;
+    if (e.target.closest("[data-grip]")) return;
     startX.current = x; startY.current = y;
     isSwiping.current = true; isHorizontal.current = null;
     if (innerRef.current) innerRef.current.style.transition = "none";
@@ -126,12 +203,8 @@ function SwipeRow({ children, onSwipeLeft, onSwipeRight, borderRadius = 12 }) {
  
   return (
     <div style={{ position: "relative", overflow: "hidden", borderRadius }}>
-      <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 80, background: "#FCEBEB", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "#A32D2D", fontWeight: 600, borderRadius }}>
-        🗑️ Delete
-      </div>
-      <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 80, background: "#E1F5EE", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "#085041", fontWeight: 600, borderRadius }}>
-        ✏️ Edit
-      </div>
+      <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 80, background: "#FCEBEB", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "#A32D2D", fontWeight: 600, borderRadius }}>🗑️ Delete</div>
+      <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 80, background: "#E1F5EE", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "#085041", fontWeight: 600, borderRadius }}>✏️ Edit</div>
       <div ref={innerRef} style={{ position: "relative", zIndex: 1, touchAction: "pan-y" }}
         onMouseDown={e => onStart(e.clientX, e.clientY, e)}
         onMouseMove={e => { if (isSwiping.current) onMove(e.clientX, e.clientY, e); }}
@@ -145,25 +218,13 @@ function SwipeRow({ children, onSwipeLeft, onSwipeRight, borderRadius = 12 }) {
   );
 }
  
-// White centred toast for delete
 function Toast({ toast, onUndo, onDelete }) {
   return (
     <>
       <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 998, opacity: toast.show ? 1 : 0, pointerEvents: toast.show ? "all" : "none", transition: "opacity 0.25s ease" }} onClick={onUndo} />
-      <div style={{
-        position: "fixed", top: "50%", left: "50%",
-        transform: toast.show ? "translate(-50%,-50%) scale(1)" : "translate(-50%,-50%) scale(0.85)",
-        opacity: toast.show ? 1 : 0, pointerEvents: toast.show ? "all" : "none",
-        transition: "transform 0.25s ease, opacity 0.25s ease",
-        background: "#fff", border: "0.5px solid #e5e5e5", borderRadius: 20,
-        padding: "24px 20px", display: "flex", flexDirection: "column", alignItems: "center",
-        gap: 14, textAlign: "center", boxShadow: "0 12px 48px rgba(0,0,0,0.18)",
-        zIndex: 999, width: "80%", maxWidth: 320, fontFamily: "'DM Sans', sans-serif",
-      }}>
+      <div style={{ position: "fixed", top: "50%", left: "50%", transform: toast.show ? "translate(-50%,-50%) scale(1)" : "translate(-50%,-50%) scale(0.85)", opacity: toast.show ? 1 : 0, pointerEvents: toast.show ? "all" : "none", transition: "transform 0.25s ease, opacity 0.25s ease", background: "#fff", border: "0.5px solid #e5e5e5", borderRadius: 20, padding: "24px 20px", display: "flex", flexDirection: "column", alignItems: "center", gap: 14, textAlign: "center", boxShadow: "0 12px 48px rgba(0,0,0,0.18)", zIndex: 999, width: "80%", maxWidth: 320, fontFamily: "'DM Sans', sans-serif" }}>
         <span style={{ fontSize: 36 }}>🗑️</span>
-        <div style={{ fontSize: 16, fontWeight: 700, color: "#111", lineHeight: 1.5 }}>
-          Delete<br /><span style={{ color: "#A32D2D" }}>"{toast.name}"</span>?
-        </div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: "#111", lineHeight: 1.5 }}>Delete<br /><span style={{ color: "#A32D2D" }}>"{toast.name}"</span>?</div>
         <div style={{ display: "flex", gap: 10, width: "100%" }}>
           <button onClick={onUndo} style={{ flex: 1, padding: "12px", borderRadius: 12, border: "none", background: "#E1F5EE", color: "#085041", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>↩ Undo</button>
           <button onClick={onDelete} style={{ flex: 1, padding: "12px", borderRadius: 12, border: "none", background: "#FCEBEB", color: "#A32D2D", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>🗑️ Delete</button>
@@ -173,35 +234,20 @@ function Toast({ toast, onUndo, onDelete }) {
   );
 }
  
-// Centred modal for Add / Edit
 function Modal({ show, title, value, onChange, onConfirm, onCancel, confirmLabel, confirmColor, placeholder }) {
   return (
     <>
       <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 998, opacity: show ? 1 : 0, pointerEvents: show ? "all" : "none", transition: "opacity 0.2s" }} onClick={onCancel} />
-      <div style={{
-        position: "fixed", top: "50%", left: "50%",
-        transform: show ? "translate(-50%,-50%) scale(1)" : "translate(-50%,-50%) scale(0.85)",
-        opacity: show ? 1 : 0, pointerEvents: show ? "all" : "none",
-        transition: "transform 0.25s ease, opacity 0.25s ease",
-        background: "#fff", borderRadius: 20, padding: "24px 20px",
-        width: "85%", maxWidth: 340, display: "flex", flexDirection: "column", gap: 16,
-        boxShadow: "0 12px 48px rgba(0,0,0,0.18)", zIndex: 999, fontFamily: "'DM Sans', sans-serif",
-      }} onClick={e => e.stopPropagation()}>
+      <div style={{ position: "fixed", top: "50%", left: "50%", transform: show ? "translate(-50%,-50%) scale(1)" : "translate(-50%,-50%) scale(0.85)", opacity: show ? 1 : 0, pointerEvents: show ? "all" : "none", transition: "transform 0.25s ease, opacity 0.25s ease", background: "#fff", borderRadius: 20, padding: "24px 20px", width: "85%", maxWidth: 340, display: "flex", flexDirection: "column", gap: 16, boxShadow: "0 12px 48px rgba(0,0,0,0.18)", zIndex: 999, fontFamily: "'DM Sans', sans-serif" }} onClick={e => e.stopPropagation()}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <span style={{ fontSize: 18, fontWeight: 700, color: "#111" }}>{title}</span>
           <button onClick={onCancel} style={{ width: 30, height: 30, borderRadius: "50%", border: "0.5px solid #eee", background: "#f5f5f5", cursor: "pointer", fontSize: 16, color: "#888", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
         </div>
-        <textarea
-          autoFocus={show}
-          value={value}
-          onChange={e => onChange(e.target.value)}
+        <textarea autoFocus={show} value={value} onChange={e => onChange(e.target.value)}
           onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); onConfirm(); } if (e.key === "Escape") onCancel(); }}
           placeholder={placeholder}
-          style={{ width: "100%", background: "#f9f9f9", border: "0.5px solid #ddd", borderRadius: 10, padding: "12px 14px", fontSize: 15, color: "#111", fontFamily: "'DM Sans', sans-serif", outline: "none", resize: "none", height: 100, lineHeight: 1.6, boxSizing: "border-box" }}
-        />
-        <button onClick={onConfirm} style={{ width: "100%", padding: 14, borderRadius: 12, border: "none", background: value.trim() ? confirmColor : "#ddd", color: value.trim() ? "#fff" : "#aaa", fontSize: 15, fontWeight: 700, cursor: value.trim() ? "pointer" : "default", fontFamily: "'DM Sans', sans-serif", transition: "background .2s" }}>
-          {confirmLabel}
-        </button>
+          style={{ width: "100%", background: "#f9f9f9", border: "0.5px solid #ddd", borderRadius: 10, padding: "12px 14px", fontSize: 15, color: "#111", fontFamily: "'DM Sans', sans-serif", outline: "none", resize: "none", height: 100, lineHeight: 1.6, boxSizing: "border-box" }} />
+        <button onClick={onConfirm} style={{ width: "100%", padding: 14, borderRadius: 12, border: "none", background: value.trim() ? confirmColor : "#ddd", color: value.trim() ? "#fff" : "#aaa", fontSize: 15, fontWeight: 700, cursor: value.trim() ? "pointer" : "default", fontFamily: "'DM Sans', sans-serif", transition: "background .2s" }}>{confirmLabel}</button>
       </div>
     </>
   );
@@ -241,7 +287,6 @@ export default function App() {
   const [addModal, setAddModal] = useState({ show: false, type: "task", taskId: null, subId: null, value: "", url: "", images: [], showPicOpts: false });
   const [editModal, setEditModal] = useState({ show: false, id: null, value: "" });
   const toastTimer = useRef(null);
-  const dragRef = useRef(null);
   const cameraRef = useRef(null);
   const galleryRef = useRef(null);
   const modalCameraRef = useRef(null);
@@ -249,7 +294,6 @@ export default function App() {
  
   const update = fn => setTasks(prev => { const next = JSON.parse(JSON.stringify(prev)); fn(next); return next; });
  
-  // toggle
   const toggleTask = id => update(t => { const item = t.find(x => x.id === id); if (item) item.open = !item.open; });
   const toggleSub = (tid, sid) => update(t => { const s = t.find(x => x.id === tid)?.subs.find(x => x.id === sid); if (s) s.open = !s.open; });
   const toggleDone = (type, tid, sid, ssid) => update(t => {
@@ -258,6 +302,80 @@ export default function App() {
     else if (type === "sub") { const s = task?.subs.find(x => x.id === sid); if (s) s.done = !s.done; }
     else if (type === "ssub") { const ss = task?.subs.find(x => x.id === sid)?.ssubs.find(x => x.id === ssid); if (ss) ss.done = !ss.done; }
   });
+ 
+  // DRAG — touch friendly reorder for tasks
+  const taskDrag = useListDrag(tasks, (from, to) => {
+    update(t => { const [m] = t.splice(from, 1); t.splice(to, 0, m); renumberAll(t); });
+  });
+ 
+  // DRAG for subs per task — stored by taskId
+  const subDragRefs = useRef({});
+  const getSubDrag = (taskId) => {
+    if (!subDragRefs.current[taskId]) {
+      subDragRefs.current[taskId] = { dragIdx: { current: null }, dragEl: { current: null }, cloneEl: { current: null }, offsetY: { current: 0 }, itemEls: { current: [] } };
+    }
+    return subDragRefs.current[taskId];
+  };
+ 
+  // DRAG for ssubs per sub — stored by subId
+  const ssubDragRefs = useRef({});
+  const getSSsubDrag = (subId) => {
+    if (!ssubDragRefs.current[subId]) {
+      ssubDragRefs.current[subId] = { dragIdx: { current: null }, dragEl: { current: null }, cloneEl: { current: null }, offsetY: { current: 0 }, itemEls: { current: [] } };
+    }
+    return ssubDragRefs.current[subId];
+  };
+ 
+  const makeTouchDrag = (refs, onReorder) => {
+    const onStart = (e, idx) => {
+      e.stopPropagation();
+      const touch = e.touches[0];
+      refs.dragIdx.current = idx;
+      const el = refs.itemEls.current[idx];
+      if (!el) return;
+      refs.dragEl.current = el;
+      const rect = el.getBoundingClientRect();
+      refs.offsetY.current = touch.clientY - rect.top;
+      const clone = el.cloneNode(true);
+      clone.style.cssText = `position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;opacity:0.85;z-index:9999;pointer-events:none;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.2);`;
+      document.body.appendChild(clone);
+      refs.cloneEl.current = clone;
+      el.style.opacity = "0.3";
+    };
+    const onMove = (e) => {
+      e.preventDefault();
+      if (refs.dragIdx.current === null || !refs.cloneEl.current) return;
+      const touch = e.touches[0];
+      refs.cloneEl.current.style.top = `${touch.clientY - refs.offsetY.current}px`;
+      refs.itemEls.current.forEach((el, i) => {
+        if (!el) return;
+        el.style.borderTop = "";
+        el.style.borderBottom = "";
+        if (i === refs.dragIdx.current) return;
+        const rect = el.getBoundingClientRect();
+        const mid = rect.top + rect.height / 2;
+        if (touch.clientY < rect.top + 10 && i < refs.dragIdx.current) el.style.borderTop = "2px solid #185FA5";
+        if (touch.clientY > rect.bottom - 10 && i > refs.dragIdx.current) el.style.borderBottom = "2px solid #185FA5";
+      });
+    };
+    const onEnd = (e) => {
+      if (refs.dragIdx.current === null) return;
+      const touch = e.changedTouches[0];
+      if (refs.cloneEl.current) { refs.cloneEl.current.remove(); refs.cloneEl.current = null; }
+      if (refs.dragEl.current) { refs.dragEl.current.style.opacity = "1"; refs.dragEl.current = null; }
+      refs.itemEls.current.forEach(el => { if (el) { el.style.borderTop = ""; el.style.borderBottom = ""; el.style.opacity = "1"; } });
+      let toIdx = refs.dragIdx.current;
+      refs.itemEls.current.forEach((el, i) => {
+        if (!el || i === refs.dragIdx.current) return;
+        const rect = el.getBoundingClientRect();
+        if (touch.clientY >= rect.top && touch.clientY <= rect.bottom) toIdx = i;
+      });
+      const from = refs.dragIdx.current;
+      refs.dragIdx.current = null;
+      if (from !== toIdx) onReorder(from, toIdx);
+    };
+    return { onStart, onMove, onEnd };
+  };
  
   // add modal
   const openAddModal = (type, taskId = null, subId = null) => {
@@ -268,6 +386,7 @@ export default function App() {
     });
     setAddModal({ show: true, type, taskId, subId, value: "", url: "", images: [], showPicOpts: false });
   };
+ 
   const confirmAdd = () => {
     const name = addModal.value.trim(); if (!name) return;
     const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -294,7 +413,7 @@ export default function App() {
     setEditModal({ show: false, id: null, value: "" });
   };
  
-  // delete (swipe left)
+  // delete
   const handleSwipeLeft = (id, name, resetFn) => {
     clearTimeout(toastTimer.current);
     setToast(prev => { if (prev.resetFn) prev.resetFn(); return { show: true, name, id, resetFn }; });
@@ -319,36 +438,7 @@ export default function App() {
     });
   };
  
-  // drag
-  const onDragStart = (e, type, taskId, subId, idx) => {
-    dragRef.current = { type, taskId, subId, idx };
-    e.dataTransfer.effectAllowed = "move";
-    e.stopPropagation();
-  };
-  const onDragOver = (e, type, taskId, subId, idx) => {
-    e.preventDefault();
-    e.stopPropagation();
-    e.dataTransfer.dropEffect = "move";
-  };
-  const onDrop = (e, type, taskId, subId, toIdx) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const d = dragRef.current;
-    if (!d || d.type !== type || d.idx === toIdx) return;
-    update(t => {
-      let list;
-      if (type === "task") list = t;
-      else if (type === "sub") list = t.find(x => x.id === taskId)?.subs;
-      else list = t.find(x => x.id === taskId)?.subs.find(x => x.id === subId)?.ssubs;
-      if (!list) return;
-      const [moved] = list.splice(d.idx, 1);
-      list.splice(toIdx, 0, moved);
-      renumberAll(t);
-    });
-    dragRef.current = null;
-  };
- 
-  // bulb / attachments
+  // attachments
   const handleImageFiles = files => {
     Array.from(files).forEach(f => {
       const r = new FileReader();
@@ -356,11 +446,10 @@ export default function App() {
       r.readAsDataURL(f);
     });
   };
- 
   const handleModalImageFiles = files => {
     Array.from(files).forEach(f => {
       const r = new FileReader();
-      r.onload = ev => setAddModal(m => ({ ...m, images: [...m.images, { src: ev.target.result, time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) }] }));
+      r.onload = ev => setAddModal(m => ({ ...m, images: [...m.images, { src: ev.target.result }] }));
       r.readAsDataURL(f);
     });
   };
@@ -383,6 +472,12 @@ export default function App() {
   const sheetItem = sheet ? getItem(tasks, sheet.itemId) : null;
   const attCount = sheetItem ? countAtt(sheetItem) : 0;
   const S = styles;
+ 
+  // task-level touch drag handlers
+  const taskTouchDrag = makeTouchDrag(
+    { dragIdx: { current: null }, dragEl: { current: null }, cloneEl: { current: null }, offsetY: { current: 0 }, itemEls: taskDrag.itemEls },
+    (from, to) => { update(t => { const [m] = t.splice(from, 1); t.splice(to, 0, m); renumberAll(t); }); }
+  );
  
   return (
     <div style={S.page}>
@@ -413,22 +508,28 @@ export default function App() {
         {tasks.map((task, ti) => {
           const hasSubs = task.subs.length > 0;
           const doneSubs = task.subs.filter(s => s.done).length;
+ 
+          // per-task sub drag
+          const subRefs = getSubDrag(task.id);
+          const subTouchDrag = makeTouchDrag(
+            { dragIdx: { current: null }, dragEl: { current: null }, cloneEl: { current: null }, offsetY: { current: 0 }, itemEls: subRefs.itemEls },
+            (from, to) => { update(t => { const task2 = t.find(x => x.id === task.id); if (!task2) return; const [m] = task2.subs.splice(from, 1); task2.subs.splice(to, 0, m); renumberAll(t); }); }
+          );
+ 
           return (
-            <div key={task.id}
-              style={{ borderRadius: 12, overflow: "hidden", border: "0.5px solid #eee" }}
-              onDragOver={e => onDragOver(e, "task", null, null, ti)}
-              onDrop={e => onDrop(e, "task", null, null, ti)}>
+            <div key={task.id} ref={el => taskDrag.itemEls.current[ti] = el} style={{ borderRadius: 12, overflow: "hidden", border: "0.5px solid #eee" }}>
               <SwipeRow borderRadius={0}
                 onSwipeLeft={resetFn => handleSwipeLeft(task.id, task.name, resetFn)}
                 onSwipeRight={() => openEditModal(task.id, task.name)}>
                 <div style={{ ...S.taskCard, borderRadius: 0 }}>
                   <div style={S.taskRow}>
-                    <div draggable style={S.grip}
-                      onDragStart={e => onDragStart(e, "task", null, null, ti)}
-                      onMouseDown={e => e.stopPropagation()}
-                      onTouchStart={e => e.stopPropagation()}>⠿</div>
+                    {/* GRIP — touch drag */}
+                    <div data-grip="true" style={S.grip}
+                      onTouchStart={e => taskTouchDrag.onStart(e, ti)}
+                      onTouchMove={taskTouchDrag.onMove}
+                      onTouchEnd={taskTouchDrag.onEnd}>⠿</div>
                     <div style={S.numCol}><span style={S.numText}>{task.num}</span></div>
-                    {hasSubs ? <button style={S.expandBtn} onClick={() => toggleTask(task.id)}>{task.open ? "−" : "+"}</button> : <div style={S.expandBtnGhost} />}
+                    <button style={S.expandBtn} onClick={() => toggleTask(task.id)}>{task.open ? "−" : "+"}</button>
                     <div style={{ ...S.checkCircle, ...(task.done ? S.checkDone : {}) }} onClick={() => toggleDone("task", task.id)} />
                     <div style={S.taskInfo} onClick={() => toggleTask(task.id)}>
                       <div style={{ ...S.taskName, ...(task.done ? S.taskNameDone : {}) }}>{task.name}</div>
@@ -443,22 +544,28 @@ export default function App() {
                 </div>
               </SwipeRow>
  
-              {task.open && hasSubs && (
+              {task.open && (
                 <div style={{ ...S.subList, background: "#fff" }}>
                   {task.subs.map((sub, si) => {
                     const hasSSubs = sub.ssubs.length > 0;
+ 
+                    // per-sub ssub drag
+                    const ssubRefs = getSSsubDrag(sub.id);
+                    const ssubTouchDrag = makeTouchDrag(
+                      { dragIdx: { current: null }, dragEl: { current: null }, cloneEl: { current: null }, offsetY: { current: 0 }, itemEls: ssubRefs.itemEls },
+                      (from, to) => { update(t => { const sub2 = t.find(x => x.id === task.id)?.subs.find(x => x.id === sub.id); if (!sub2) return; const [m] = sub2.ssubs.splice(from, 1); sub2.ssubs.splice(to, 0, m); renumberAll(t); }); }
+                    );
+ 
                     return (
-                      <div key={sub.id}
-                        onDragOver={e => onDragOver(e, "sub", task.id, null, si)}
-                        onDrop={e => onDrop(e, "sub", task.id, null, si)}>
+                      <div key={sub.id} ref={el => subRefs.itemEls.current[si] = el}>
                         <SwipeRow borderRadius={8}
                           onSwipeLeft={resetFn => handleSwipeLeft(sub.id, sub.name, resetFn)}
                           onSwipeRight={() => openEditModal(sub.id, sub.name)}>
                           <div style={S.subRow}>
-                            <div draggable style={S.subGrip}
-                              onDragStart={e => onDragStart(e, "sub", task.id, null, si)}
-                              onMouseDown={e => e.stopPropagation()}
-                              onTouchStart={e => e.stopPropagation()}>⠿</div>
+                            <div data-grip="true" style={S.subGrip}
+                              onTouchStart={e => subTouchDrag.onStart(e, si)}
+                              onTouchMove={subTouchDrag.onMove}
+                              onTouchEnd={subTouchDrag.onEnd}>⠿</div>
                             <div style={S.subNumCol}><span style={S.subNumText}>{sub.num}</span></div>
                             <button style={S.subExpandBtn} onClick={() => toggleSub(task.id, sub.id)}>{sub.open ? "−" : "+"}</button>
                             <div style={{ ...S.subCheck, ...(sub.done ? S.checkDone : {}) }} onClick={() => toggleDone("sub", task.id, sub.id)} />
@@ -469,20 +576,18 @@ export default function App() {
                           </div>
                         </SwipeRow>
  
-                        {(sub.open || !hasSSubs) && (
+                        {sub.open && (
                           <div style={S.ssubList}>
-                            {sub.open && sub.ssubs.map((ss, ssi) => (
-                              <div key={ss.id}
-                                onDragOver={e => onDragOver(e, "ssub", task.id, sub.id, ssi)}
-                                onDrop={e => onDrop(e, "ssub", task.id, sub.id, ssi)}>
+                            {sub.ssubs.map((ss, ssi) => (
+                              <div key={ss.id} ref={el => ssubRefs.itemEls.current[ssi] = el}>
                                 <SwipeRow borderRadius={8}
                                   onSwipeLeft={resetFn => handleSwipeLeft(ss.id, ss.name, resetFn)}
                                   onSwipeRight={() => openEditModal(ss.id, ss.name)}>
                                   <div style={S.ssubRow}>
-                                    <div draggable style={S.ssubGrip}
-                                      onDragStart={e => onDragStart(e, "ssub", task.id, sub.id, ssi)}
-                                      onMouseDown={e => e.stopPropagation()}
-                                      onTouchStart={e => e.stopPropagation()}>⠿</div>
+                                    <div data-grip="true" style={S.ssubGrip}
+                                      onTouchStart={e => ssubTouchDrag.onStart(e, ssi)}
+                                      onTouchMove={ssubTouchDrag.onMove}
+                                      onTouchEnd={ssubTouchDrag.onEnd}>⠿</div>
                                     <div style={S.ssubNumCol}><span style={S.ssubNumText}>{ss.num}</span></div>
                                     <div style={{ ...S.ssubCheck, ...(ss.done ? S.checkDone : {}) }} onClick={() => toggleDone("ssub", task.id, sub.id, ss.id)} />
                                     <span style={{ ...S.ssubName, ...(ss.done ? S.taskNameDone : {}) }}>{ss.name}</span>
@@ -526,19 +631,16 @@ export default function App() {
                 <div style={{ display: "flex", flexDirection: "column", gap: 14, paddingTop: 8 }}>
                   <button style={S.backBtn} onClick={() => { setSheet({ ...sheet, view: "menu" }); setShowPicOptions(false); setImages([]); }}>← Back</button>
                   <div>
-                    <div style={S.formLabel}>📷 Picture</div>
                     <button onClick={() => setShowPicOptions(!showPicOptions)} style={{ width: "100%", padding: "10px 14px", borderRadius: 10, border: "0.5px dashed #ddd", background: "#f9f9f9", cursor: "pointer", fontSize: 13, color: "#185FA5", fontFamily: "'DM Sans', sans-serif", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
                       📷 Add Picture {showPicOptions ? "▲" : "▼"}
                     </button>
                     {showPicOptions && (
                       <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                         <div onClick={() => cameraRef.current.click()} style={{ flex: 1, background: "#E6F1FB", border: "0.5px solid #93C5FD", borderRadius: 12, padding: "14px 10px", display: "flex", flexDirection: "column", alignItems: "center", gap: 6, cursor: "pointer" }}>
-                          <span style={{ fontSize: 26 }}>📸</span>
-                          <span style={{ fontSize: 12, fontWeight: 600, color: "#185FA5" }}>Take Photo</span>
+                          <span style={{ fontSize: 26 }}>📸</span><span style={{ fontSize: 12, fontWeight: 600, color: "#185FA5" }}>Take Photo</span>
                         </div>
                         <div onClick={() => galleryRef.current.click()} style={{ flex: 1, background: "#F3EEFF", border: "0.5px solid #C4B5FD", borderRadius: 12, padding: "14px 10px", display: "flex", flexDirection: "column", alignItems: "center", gap: 6, cursor: "pointer" }}>
-                          <span style={{ fontSize: 26 }}>🖼️</span>
-                          <span style={{ fontSize: 12, fontWeight: 600, color: "#7C3AED" }}>Gallery</span>
+                          <span style={{ fontSize: 26 }}>🖼️</span><span style={{ fontSize: 12, fontWeight: 600, color: "#7C3AED" }}>Gallery</span>
                         </div>
                       </div>
                     )}
@@ -617,45 +719,33 @@ export default function App() {
       {addModal.show && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 998 }} onClick={() => setAddModal(m => ({ ...m, show: false }))}>
           <div style={{ background: "#fff", borderRadius: 20, padding: "24px 20px", width: "88%", maxWidth: 360, display: "flex", flexDirection: "column", gap: 14, boxShadow: "0 12px 48px rgba(0,0,0,0.18)", maxHeight: "90vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
- 
-            {/* HEADER */}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <span style={{ fontSize: 18, fontWeight: 700, color: "#111" }}>
                 {addModal.type === "task" ? "➕ Add Task" : addModal.type === "sub" ? "➕ Add Subtask" : "➕ Add Sub-subtask"}
               </span>
               <button onClick={() => setAddModal(m => ({ ...m, show: false }))} style={{ width: 30, height: 30, borderRadius: "50%", border: "0.5px solid #eee", background: "#f5f5f5", cursor: "pointer", fontSize: 16, color: "#888", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
             </div>
- 
-            {/* NAME INPUT */}
             <div>
               <div style={{ fontSize: 11, fontWeight: 600, color: "#aaa", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
                 {addModal.type === "task" ? "Task Name" : addModal.type === "sub" ? "Subtask Name" : "Sub-subtask Name"}
               </div>
-              <textarea
-                autoFocus
-                value={addModal.value}
+              <textarea autoFocus value={addModal.value}
                 onChange={e => setAddModal(m => ({ ...m, value: e.target.value }))}
                 onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); confirmAdd(); } if (e.key === "Escape") setAddModal(m => ({ ...m, show: false })); }}
                 placeholder={addModal.type === "task" ? "What do you need to do?" : addModal.type === "sub" ? "What is the subtask?" : "What is the sub-subtask?"}
-                style={{ width: "100%", background: "#f9f9f9", border: "0.5px solid #ddd", borderRadius: 10, padding: "12px 14px", fontSize: 15, color: "#111", fontFamily: "'DM Sans', sans-serif", outline: "none", resize: "none", height: 80, lineHeight: 1.6, boxSizing: "border-box" }}
-              />
+                style={{ width: "100%", background: "#f9f9f9", border: "0.5px solid #ddd", borderRadius: 10, padding: "12px 14px", fontSize: 15, color: "#111", fontFamily: "'DM Sans', sans-serif", outline: "none", resize: "none", height: 80, lineHeight: 1.6, boxSizing: "border-box" }} />
             </div>
- 
-            {/* PICTURE */}
             <div>
-              <div style={{ fontSize: 11, fontWeight: 600, color: "#aaa", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>📷 Picture</div>
               <button onClick={() => setAddModal(m => ({ ...m, showPicOpts: !m.showPicOpts }))} style={{ width: "100%", padding: "10px 14px", borderRadius: 10, border: "0.5px dashed #ddd", background: "#f9f9f9", cursor: "pointer", fontSize: 13, color: "#185FA5", fontFamily: "'DM Sans', sans-serif", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
                 📷 Add Picture {addModal.showPicOpts ? "▲" : "▼"}
               </button>
               {addModal.showPicOpts && (
                 <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                   <div onClick={() => modalCameraRef.current.click()} style={{ flex: 1, background: "#E6F1FB", border: "0.5px solid #93C5FD", borderRadius: 12, padding: "12px 8px", display: "flex", flexDirection: "column", alignItems: "center", gap: 6, cursor: "pointer" }}>
-                    <span style={{ fontSize: 24 }}>📸</span>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: "#185FA5" }}>Take Photo</span>
+                    <span style={{ fontSize: 24 }}>📸</span><span style={{ fontSize: 12, fontWeight: 600, color: "#185FA5" }}>Take Photo</span>
                   </div>
                   <div onClick={() => modalGalleryRef.current.click()} style={{ flex: 1, background: "#F3EEFF", border: "0.5px solid #C4B5FD", borderRadius: 12, padding: "12px 8px", display: "flex", flexDirection: "column", alignItems: "center", gap: 6, cursor: "pointer" }}>
-                    <span style={{ fontSize: 24 }}>🖼️</span>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: "#7C3AED" }}>Gallery</span>
+                    <span style={{ fontSize: 24 }}>🖼️</span><span style={{ fontSize: 12, fontWeight: 600, color: "#7C3AED" }}>Gallery</span>
                   </div>
                 </div>
               )}
@@ -665,29 +755,19 @@ export default function App() {
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 6, marginTop: 8 }}>
                   {addModal.images.map((img, i) => (
                     <div key={i} style={{ position: "relative" }}>
-                      <img src={img.src} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8, border: "0.5px solid #eee" }} />
+                      <img src={img.src} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8 }} />
                       <button onClick={() => setAddModal(m => ({ ...m, images: m.images.filter((_, idx) => idx !== i) }))} style={{ position: "absolute", top: 3, right: 3, width: 18, height: 18, borderRadius: "50%", background: "#FCEBEB", border: "none", cursor: "pointer", fontSize: 10, color: "#A32D2D" }}>✕</button>
                     </div>
                   ))}
                 </div>
               )}
             </div>
- 
-            {/* URL */}
             <div>
               <div style={{ fontSize: 11, fontWeight: 600, color: "#aaa", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>🔗 URL Link</div>
-              <input
-                value={addModal.url}
-                onChange={e => setAddModal(m => ({ ...m, url: e.target.value }))}
-                placeholder="https://..."
-                style={{ width: "100%", background: "#f9f9f9", border: "0.5px solid #eee", borderRadius: 10, padding: "10px 12px", fontSize: 13, color: "#111", fontFamily: "'DM Sans', sans-serif", outline: "none", boxSizing: "border-box" }}
-              />
+              <input value={addModal.url} onChange={e => setAddModal(m => ({ ...m, url: e.target.value }))} placeholder="https://..."
+                style={{ width: "100%", background: "#f9f9f9", border: "0.5px solid #eee", borderRadius: 10, padding: "10px 12px", fontSize: 13, color: "#111", fontFamily: "'DM Sans', sans-serif", outline: "none", boxSizing: "border-box" }} />
             </div>
- 
-            {/* DONE BUTTON */}
-            <button
-              onClick={confirmAdd}
-              style={{ width: "100%", padding: 14, borderRadius: 12, border: "none", background: addModal.value.trim() ? "#185FA5" : "#ddd", color: addModal.value.trim() ? "#fff" : "#aaa", fontSize: 15, fontWeight: 700, cursor: addModal.value.trim() ? "pointer" : "default", fontFamily: "'DM Sans', sans-serif", transition: "background .2s" }}>
+            <button onClick={confirmAdd} style={{ width: "100%", padding: 14, borderRadius: 12, border: "none", background: addModal.value.trim() ? "#185FA5" : "#ddd", color: addModal.value.trim() ? "#fff" : "#aaa", fontSize: 15, fontWeight: 700, cursor: addModal.value.trim() ? "pointer" : "default", fontFamily: "'DM Sans', sans-serif", transition: "background .2s" }}>
               ✓ Done
             </button>
           </div>
@@ -725,7 +805,7 @@ const styles = {
   addHeaderBtn: { fontSize: 13, color: "#185FA5", background: "#E6F1FB", border: "0.5px solid #93C5FD", padding: "8px 16px", borderRadius: 20, cursor: "pointer", fontWeight: 600 },
   taskCard: { background: "#fff" },
   taskRow: { display: "flex", alignItems: "center", padding: "11px 10px 11px 0" },
-  grip: { width: 24, display: "flex", alignItems: "center", justifyContent: "center", cursor: "grab", color: "#ccc", fontSize: 14, flexShrink: 0, paddingLeft: 8 },
+  grip: { width: 28, height: 40, display: "flex", alignItems: "center", justifyContent: "center", cursor: "grab", color: "#bbb", fontSize: 16, flexShrink: 0, paddingLeft: 8, touchAction: "none" },
   numCol: { width: 28, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 },
   numText: { fontSize: 11, fontWeight: 600, color: "#aaa", fontFamily: "monospace" },
   expandBtn: { width: 18, height: 18, borderRadius: 4, border: "0.5px solid #ddd", background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 11, color: "#888", flexShrink: 0 },
@@ -739,20 +819,20 @@ const styles = {
   progressBg: { height: 2, background: "#f0f0f0", borderRadius: 1, marginTop: 5, overflow: "hidden" },
   progressFill: { height: "100%", background: "#1D9E75", borderRadius: 1 },
   subList: { padding: "0 10px 10px 0", display: "flex", flexDirection: "column", gap: 3 },
-  subRow: { display: "flex", alignItems: "center", padding: "6px 8px 6px 0", background: "#CCFBF1", borderRadius: 8, borderLeft: "3px solid #0D9488" },
-  subGrip: { width: 20, display: "flex", alignItems: "center", justifyContent: "center", cursor: "grab", color: "#ccc", fontSize: 12, flexShrink: 0 },
+  subRow: { display: "flex", alignItems: "center", padding: "6px 8px 6px 0", background: "#F3F4F6", borderRadius: 8, borderLeft: "3px solid #6B7280" },
+  subGrip: { width: 24, height: 36, display: "flex", alignItems: "center", justifyContent: "center", cursor: "grab", color: "#bbb", fontSize: 14, flexShrink: 0, touchAction: "none" },
   subNumCol: { width: 36, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  subNumText: { fontSize: 10, color: "#0D9488", fontFamily: "monospace" },
+  subNumText: { fontSize: 10, color: "#6B7280", fontFamily: "monospace" },
   subExpandBtn: { width: 15, height: 15, borderRadius: 3, border: "0.5px solid #ddd", background: "transparent", cursor: "pointer", fontSize: 9, color: "#888", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" },
   subExpandGhost: { width: 15, height: 15, flexShrink: 0 },
   subCheck: { width: 14, height: 14, borderRadius: "50%", border: "1.5px solid #ddd", flexShrink: 0, cursor: "pointer", marginLeft: 8 },
   subInfo: { flex: 1, minWidth: 0, cursor: "pointer", marginLeft: 8 },
   subName: { fontSize: 13, color: "#111", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
   ssubList: { padding: "3px 0 3px 52px", display: "flex", flexDirection: "column", gap: 3 },
-  ssubRow: { display: "flex", alignItems: "center", padding: "5px 8px 5px 0", background: "#E0F2FE", borderRadius: 8, borderLeft: "3px solid #0284C7" },
-  ssubGrip: { width: 16, display: "flex", alignItems: "center", justifyContent: "center", cursor: "grab", color: "#ccc", fontSize: 11, flexShrink: 0 },
+  ssubRow: { display: "flex", alignItems: "center", padding: "5px 8px 5px 0", background: "#E5E7EB", borderRadius: 8, borderLeft: "3px solid #374151" },
+  ssubGrip: { width: 20, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "grab", color: "#bbb", fontSize: 12, flexShrink: 0, touchAction: "none" },
   ssubNumCol: { width: 44, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  ssubNumText: { fontSize: 9, color: "#0284C7", fontFamily: "monospace" },
+  ssubNumText: { fontSize: 9, color: "#374151", fontFamily: "monospace" },
   ssubCheck: { width: 12, height: 12, borderRadius: "50%", border: "1.5px solid #ddd", flexShrink: 0, cursor: "pointer" },
   ssubName: { fontSize: 13, color: "#111", flex: 1, marginLeft: 8 },
   addRowBtn: { display: "flex", alignItems: "center", gap: 6, padding: "6px 8px", borderRadius: 8, border: "0.5px dashed #ddd", cursor: "pointer", background: "transparent", width: "100%", color: "#aaa", fontSize: 11, fontFamily: "DM Sans, sans-serif" },
