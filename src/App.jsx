@@ -171,25 +171,41 @@ function SwipeRow({ children, onSwipeLeft, borderRadius = 12 }) {
  
 function Toast({ toast, onUndo, onDelete }) {
   return (
+    <>
+    {/* Dark overlay behind popup */}
     <div style={{
-      position: "fixed", bottom: 24, left: "50%",
-      transform: toast.show ? "translateX(-50%) translateY(0)" : "translateX(-50%) translateY(120px)",
-      transition: "transform 0.3s ease",
+      position: "fixed", inset: 0,
+      background: "rgba(0,0,0,0.4)",
+      zIndex: 998,
+      opacity: toast.show ? 1 : 0,
+      pointerEvents: toast.show ? "all" : "none",
+      transition: "opacity 0.25s ease",
+    }} onClick={onUndo} />
+    <div style={{
+      position: "fixed", top: "50%", left: "50%",
+      transform: toast.show ? "translate(-50%, -50%) scale(1)" : "translate(-50%, -50%) scale(0.85)",
+      opacity: toast.show ? 1 : 0,
+      pointerEvents: toast.show ? "all" : "none",
+      transition: "transform 0.25s ease, opacity 0.25s ease",
       background: "#fff", border: "0.5px solid #e5e5e5",
-      borderRadius: 16, padding: "12px 16px",
-      display: "flex", alignItems: "center", gap: 10,
-      fontSize: 13, fontWeight: 500,
-      boxShadow: "0 8px 32px rgba(0,0,0,0.12)",
-      zIndex: 999, minWidth: 280,
+      borderRadius: 20, padding: "24px 24px",
+      display: "flex", flexDirection: "column", alignItems: "center", gap: 16,
+      textAlign: "center",
+      fontSize: 16, fontWeight: 500,
+      boxShadow: "0 12px 48px rgba(0,0,0,0.18)",
+      zIndex: 999, width: "80%", maxWidth: 320,
       fontFamily: "'DM Sans', sans-serif",
     }}>
-      <span style={{ fontSize: 18, flexShrink: 0 }}>🗑️</span>
-      <span style={{ flex: 1, fontSize: 13, color: "#111", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-        Delete <strong style={{ color: "#A32D2D" }}>"{toast.name}"</strong>?
-      </span>
-      <button onClick={onUndo} style={{ padding: "7px 14px", borderRadius: 10, border: "0.5px solid #C6F0DE", background: "#E1F5EE", color: "#085041", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, fontFamily: "'DM Sans', sans-serif" }}>↩ Undo</button>
-      <button onClick={onDelete} style={{ padding: "7px 14px", borderRadius: 10, border: "0.5px solid #FCBEBE", background: "#FCEBEB", color: "#A32D2D", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, fontFamily: "'DM Sans', sans-serif" }}>Delete</button>
+      <span style={{ fontSize: 36 }}>🗑️</span>
+      <div style={{ fontSize: 16, fontWeight: 600, color: "#111", lineHeight: 1.5 }}>
+        Delete<br /><span style={{ color: "#A32D2D" }}>"{toast.name}"</span>?
+      </div>
+      <div style={{ display: "flex", gap: 10, width: "100%" }}>
+        <button onClick={onUndo} style={{ flex: 1, padding: "12px", borderRadius: 12, border: "0.5px solid #C6F0DE", background: "#E1F5EE", color: "#085041", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>↩ Undo</button>
+        <button onClick={onDelete} style={{ flex: 1, padding: "12px", borderRadius: 12, border: "0.5px solid #FCBEBE", background: "#FCEBEB", color: "#A32D2D", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>🗑️ Delete</button>
+      </div>
     </div>
+    </>
   );
 }
  
@@ -556,7 +572,7 @@ function SheetOption({ icon, title, sub, color, onClick }) {
 }
  
 const styles = {
-  page: { background: "#f5f5f5", minHeight: "100vh", padding: "16px 12px", maxWidth: "100%", margin: 0, fontFamily: "'DM Sans', sans-serif" },
+  page: { background: "#f5f5f5", minHeight: "100vh", padding: 16, maxWidth: 480, margin: "0 auto", fontFamily: "'DM Sans', sans-serif" },
   topbar: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 },
   topTitle: { fontSize: 18, fontWeight: 700, color: "#111", letterSpacing: -0.3 },
   topSub: { fontSize: 11, color: "#888", marginTop: 1 },
