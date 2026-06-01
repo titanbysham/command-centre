@@ -296,6 +296,7 @@ export default function App() {
   const [addModal, setAddModal] = useState({ show: false, type: "task", taskId: null, subId: null, value: "", url: "", images: [], showPicOpts: false });
   const [editModal, setEditModal] = useState({ show: false, id: null, value: "" });
   const [showSettings, setShowSettings] = useState(false);
+  const [fullImg, setFullImg] = useState(null);
   const [logbook, setLogbook] = useState(() => {
     try { const l = localStorage.getItem("command_centre_logbook"); return l ? JSON.parse(l) : []; } catch (e) { return []; }
   });
@@ -946,4 +947,3 @@ const styles = {
   noteCard: { background: "#f9f9f9", borderRadius: 8, padding: "10px 12px", fontSize: 13, color: "#111", lineHeight: 1.5 },
   delBtn: { position: "absolute", top: 6, right: 6, width: 18, height: 18, borderRadius: "50%", background: "#FCEBEB", border: "none", cursor: "pointer", fontSize: 10, color: "#A32D2D" },
 };
- 
