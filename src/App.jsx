@@ -74,17 +74,14 @@ function countAtt(item) {
 }
  
 function Pill({ status, done }) {
-  if (done) return <span style={pillStyle("#E1F5EE", "#085041")}>Done</span>;
-  if (status === "ongoing") return <span style={pillStyle("#E6F1FB", "#185FA5")}>Ongoing</span>;
-  if (status === "blocked") return <span style={pillStyle("#FCEBEB", "#A32D2D")}>Blocked</span>;
+  if (done) return <span style={{ background: "#E1F5EE", color: "#085041", fontSize: 9, padding: "2px 7px", borderRadius: 20, fontWeight: 600 }}>Done</span>;
+  if (status === "ongoing") return <span style={{ background: "#E6F1FB", color: "#185FA5", fontSize: 9, padding: "2px 7px", borderRadius: 20, fontWeight: 600 }}>Ongoing</span>;
+  if (status === "blocked") return <span style={{ background: "#FCEBEB", color: "#A32D2D", fontSize: 9, padding: "2px 7px", borderRadius: 20, fontWeight: 600 }}>Blocked</span>;
   return null;
 }
-function pillStyle(bg, color) {
-  return { background: bg, color, fontSize: 9, padding: "2px 7px", borderRadius: 20, fontWeight: 600 };
-}
  
-// SwipeRow — stopPropagation so parent card doesn't also swipe
-function SwipeRow({ children, onSwipeLeft, borderRadius = 12 }) {
+// SwipeRow — left = delete, right = edit
+function SwipeRow({ children, onSwipeLeft, onSwipeRight, borderRadius = 12 }) {
   const startX = useRef(0);
   const startY = useRef(0);
   const currentX = useRef(0);
@@ -94,46 +91,33 @@ function SwipeRow({ children, onSwipeLeft, borderRadius = 12 }) {
   const THRESHOLD = 55;
  
   const onStart = (x, y, e) => {
-    // Don't steal events from buttons/interactive elements
-    if (e.target.closest("button") || e.target.closest("[data-no-swipe]")) return;
-    startX.current = x;
-    startY.current = y;
-    isSwiping.current = true;
-    isHorizontal.current = null;
+    if (e.target.closest("button")) return;
+    startX.current = x; startY.current = y;
+    isSwiping.current = true; isHorizontal.current = null;
     if (innerRef.current) innerRef.current.style.transition = "none";
   };
- 
   const onMove = (x, y, e) => {
     if (!isSwiping.current) return;
-    const dx = x - startX.current;
-    const dy = y - startY.current;
-    if (isHorizontal.current === null) {
-      if (Math.abs(dx) > 6 || Math.abs(dy) > 6) {
-        isHorizontal.current = Math.abs(dx) > Math.abs(dy);
-      }
-    }
+    const dx = x - startX.current, dy = y - startY.current;
+    if (isHorizontal.current === null && (Math.abs(dx) > 6 || Math.abs(dy) > 6))
+      isHorizontal.current = Math.abs(dx) > Math.abs(dy);
     if (!isHorizontal.current) return;
-    // prevent page scroll when swiping horizontally
     if (e && e.cancelable) e.preventDefault();
-    currentX.current = Math.min(0, dx);
+    currentX.current = dx;
     if (innerRef.current) innerRef.current.style.transform = `translateX(${currentX.current}px)`;
   };
- 
   const onEnd = () => {
-    if (!isSwiping.current || !isHorizontal.current) {
-      isSwiping.current = false;
-      return;
-    }
+    if (!isSwiping.current || !isHorizontal.current) { isSwiping.current = false; return; }
     isSwiping.current = false;
     if (innerRef.current) innerRef.current.style.transition = "transform 0.2s ease";
     if (currentX.current < -THRESHOLD) {
       if (innerRef.current) innerRef.current.style.transform = "translateX(-80px)";
       onSwipeLeft && onSwipeLeft(() => {
-        if (innerRef.current) {
-          innerRef.current.style.transition = "transform 0.2s ease";
-          innerRef.current.style.transform = "translateX(0)";
-        }
+        if (innerRef.current) { innerRef.current.style.transition = "transform 0.2s ease"; innerRef.current.style.transform = "translateX(0)"; }
       });
+    } else if (currentX.current > THRESHOLD) {
+      if (innerRef.current) innerRef.current.style.transform = "translateX(0)";
+      onSwipeRight && onSwipeRight();
     } else {
       if (innerRef.current) innerRef.current.style.transform = "translateX(0)";
     }
@@ -142,87 +126,129 @@ function SwipeRow({ children, onSwipeLeft, borderRadius = 12 }) {
  
   return (
     <div style={{ position: "relative", overflow: "hidden", borderRadius }}>
-      {/* Red delete bg */}
-      <div style={{
-        position: "absolute", right: 0, top: 0, bottom: 0, width: 80,
-        background: "#FCEBEB", display: "flex", alignItems: "center",
-        justifyContent: "center", fontSize: 12, color: "#A32D2D",
-        fontWeight: 600, gap: 4, borderRadius,
-      }}>
+      <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 80, background: "#FCEBEB", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "#A32D2D", fontWeight: 600, borderRadius }}>
         🗑️ Delete
       </div>
-      {/* Swipeable content */}
-      <div
-        ref={innerRef}
-        style={{ position: "relative", zIndex: 1, touchAction: "pan-y" }}
+      <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 80, background: "#E1F5EE", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "#085041", fontWeight: 600, borderRadius }}>
+        ✏️ Edit
+      </div>
+      <div ref={innerRef} style={{ position: "relative", zIndex: 1, touchAction: "pan-y" }}
         onMouseDown={e => onStart(e.clientX, e.clientY, e)}
         onMouseMove={e => { if (isSwiping.current) onMove(e.clientX, e.clientY, e); }}
-        onMouseUp={onEnd}
-        onMouseLeave={onEnd}
+        onMouseUp={onEnd} onMouseLeave={onEnd}
         onTouchStart={e => onStart(e.touches[0].clientX, e.touches[0].clientY, e)}
         onTouchMove={e => onMove(e.touches[0].clientX, e.touches[0].clientY, e)}
-        onTouchEnd={onEnd}
-      >
+        onTouchEnd={onEnd}>
         {children}
       </div>
     </div>
   );
 }
  
+// White centred toast for delete
 function Toast({ toast, onUndo, onDelete }) {
   return (
     <>
-    {/* Dark overlay behind popup */}
-    <div style={{
-      position: "fixed", inset: 0,
-      background: "rgba(0,0,0,0.4)",
-      zIndex: 998,
-      opacity: toast.show ? 1 : 0,
-      pointerEvents: toast.show ? "all" : "none",
-      transition: "opacity 0.25s ease",
-    }} onClick={onUndo} />
-    <div style={{
-      position: "fixed", top: "50%", left: "50%",
-      transform: toast.show ? "translate(-50%, -50%) scale(1)" : "translate(-50%, -50%) scale(0.85)",
-      opacity: toast.show ? 1 : 0,
-      pointerEvents: toast.show ? "all" : "none",
-      transition: "transform 0.25s ease, opacity 0.25s ease",
-      background: "#fff", border: "0.5px solid #e5e5e5",
-      borderRadius: 20, padding: "24px 24px",
-      display: "flex", flexDirection: "column", alignItems: "center", gap: 16,
-      textAlign: "center",
-      fontSize: 16, fontWeight: 500,
-      boxShadow: "0 12px 48px rgba(0,0,0,0.18)",
-      zIndex: 999, width: "80%", maxWidth: 320,
-      fontFamily: "'DM Sans', sans-serif",
-    }}>
-      <span style={{ fontSize: 36 }}>🗑️</span>
-      <div style={{ fontSize: 16, fontWeight: 600, color: "#111", lineHeight: 1.5 }}>
-        Delete<br /><span style={{ color: "#A32D2D" }}>"{toast.name}"</span>?
+      <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 998, opacity: toast.show ? 1 : 0, pointerEvents: toast.show ? "all" : "none", transition: "opacity 0.25s ease" }} onClick={onUndo} />
+      <div style={{
+        position: "fixed", top: "50%", left: "50%",
+        transform: toast.show ? "translate(-50%,-50%) scale(1)" : "translate(-50%,-50%) scale(0.85)",
+        opacity: toast.show ? 1 : 0, pointerEvents: toast.show ? "all" : "none",
+        transition: "transform 0.25s ease, opacity 0.25s ease",
+        background: "#fff", border: "0.5px solid #e5e5e5", borderRadius: 20,
+        padding: "24px 20px", display: "flex", flexDirection: "column", alignItems: "center",
+        gap: 14, textAlign: "center", boxShadow: "0 12px 48px rgba(0,0,0,0.18)",
+        zIndex: 999, width: "80%", maxWidth: 320, fontFamily: "'DM Sans', sans-serif",
+      }}>
+        <span style={{ fontSize: 36 }}>🗑️</span>
+        <div style={{ fontSize: 16, fontWeight: 700, color: "#111", lineHeight: 1.5 }}>
+          Delete<br /><span style={{ color: "#A32D2D" }}>"{toast.name}"</span>?
+        </div>
+        <div style={{ display: "flex", gap: 10, width: "100%" }}>
+          <button onClick={onUndo} style={{ flex: 1, padding: "12px", borderRadius: 12, border: "none", background: "#E1F5EE", color: "#085041", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>↩ Undo</button>
+          <button onClick={onDelete} style={{ flex: 1, padding: "12px", borderRadius: 12, border: "none", background: "#FCEBEB", color: "#A32D2D", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>🗑️ Delete</button>
+        </div>
       </div>
-      <div style={{ display: "flex", gap: 10, width: "100%" }}>
-        <button onClick={onUndo} style={{ flex: 1, padding: "12px", borderRadius: 12, border: "0.5px solid #C6F0DE", background: "#E1F5EE", color: "#085041", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>↩ Undo</button>
-        <button onClick={onDelete} style={{ flex: 1, padding: "12px", borderRadius: 12, border: "0.5px solid #FCBEBE", background: "#FCEBEB", color: "#A32D2D", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>🗑️ Delete</button>
-      </div>
-    </div>
     </>
+  );
+}
+ 
+// Centred modal for Add / Edit
+function Modal({ show, title, value, onChange, onConfirm, onCancel, confirmLabel, confirmColor, placeholder }) {
+  return (
+    <>
+      <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 998, opacity: show ? 1 : 0, pointerEvents: show ? "all" : "none", transition: "opacity 0.2s" }} onClick={onCancel} />
+      <div style={{
+        position: "fixed", top: "50%", left: "50%",
+        transform: show ? "translate(-50%,-50%) scale(1)" : "translate(-50%,-50%) scale(0.85)",
+        opacity: show ? 1 : 0, pointerEvents: show ? "all" : "none",
+        transition: "transform 0.25s ease, opacity 0.25s ease",
+        background: "#fff", borderRadius: 20, padding: "24px 20px",
+        width: "85%", maxWidth: 340, display: "flex", flexDirection: "column", gap: 16,
+        boxShadow: "0 12px 48px rgba(0,0,0,0.18)", zIndex: 999, fontFamily: "'DM Sans', sans-serif",
+      }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <span style={{ fontSize: 18, fontWeight: 700, color: "#111" }}>{title}</span>
+          <button onClick={onCancel} style={{ width: 30, height: 30, borderRadius: "50%", border: "0.5px solid #eee", background: "#f5f5f5", cursor: "pointer", fontSize: 16, color: "#888", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+        </div>
+        <textarea
+          autoFocus={show}
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); onConfirm(); } if (e.key === "Escape") onCancel(); }}
+          placeholder={placeholder}
+          style={{ width: "100%", background: "#f9f9f9", border: "0.5px solid #ddd", borderRadius: 10, padding: "12px 14px", fontSize: 15, color: "#111", fontFamily: "'DM Sans', sans-serif", outline: "none", resize: "none", height: 100, lineHeight: 1.6, boxSizing: "border-box" }}
+        />
+        <button onClick={onConfirm} style={{ width: "100%", padding: 14, borderRadius: 12, border: "none", background: value.trim() ? confirmColor : "#ddd", color: value.trim() ? "#fff" : "#aaa", fontSize: 15, fontWeight: 700, cursor: value.trim() ? "pointer" : "default", fontFamily: "'DM Sans', sans-serif", transition: "background .2s" }}>
+          {confirmLabel}
+        </button>
+      </div>
+    </>
+  );
+}
+ 
+function BulbBtn({ count, onClick, size }) {
+  const lit = count > 0;
+  return (
+    <button onClick={onClick} style={{ width: size, height: size, borderRadius: "50%", border: lit ? "0.5px solid #E5A832" : "0.5px solid #ddd", background: lit ? "#FAEEDA" : "#f5f5f5", color: lit ? "#BA7517" : "#aaa", fontSize: size * 0.5, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginLeft: 6, position: "relative" }}>
+      💡
+      {count > 0 && <span style={{ position: "absolute", top: -3, right: -3, width: 13, height: 13, borderRadius: "50%", background: "#BA7517", color: "#fff", fontSize: 8, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, border: "1.5px solid #fff" }}>{count}</span>}
+    </button>
+  );
+}
+ 
+function SheetOption({ icon, title, sub, color, onClick }) {
+  return (
+    <div onClick={onClick} style={{ display: "flex", alignItems: "center", gap: 12, padding: 14, borderRadius: 12, border: "0.5px solid #eee", background: "#fafafa", cursor: "pointer" }}>
+      <div style={{ width: 36, height: 36, borderRadius: "50%", background: color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>{icon}</div>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: "#111" }}>{title}</div>
+        <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>{sub}</div>
+      </div>
+      <span style={{ color: "#ccc" }}>›</span>
+    </div>
   );
 }
  
 export default function App() {
   const [tasks, setTasks] = useState(initialTasks);
-  const [adding, setAdding] = useState({ type: null, taskId: null, subId: null });
-  const [inputVal, setInputVal] = useState("");
   const [sheet, setSheet] = useState(null);
   const [urlInput, setUrlInput] = useState("");
   const [noteInput, setNoteInput] = useState("");
+  const [images, setImages] = useState([]);
+  const [showPicOptions, setShowPicOptions] = useState(false);
   const [toast, setToast] = useState({ show: false, name: "", id: null, resetFn: null });
+  const [addModal, setAddModal] = useState({ show: false, type: "task", taskId: null, subId: null, value: "" });
+  const [editModal, setEditModal] = useState({ show: false, id: null, value: "" });
   const toastTimer = useRef(null);
   const dragRef = useRef(null);
+  const cameraRef = useRef(null);
+  const galleryRef = useRef(null);
  
-  const update = (fn) => setTasks(prev => { const next = JSON.parse(JSON.stringify(prev)); fn(next); return next; });
+  const update = fn => setTasks(prev => { const next = JSON.parse(JSON.stringify(prev)); fn(next); return next; });
  
-  const toggleTask = (id) => update(t => { const item = t.find(x => x.id === id); if (item) item.open = !item.open; });
+  // toggle
+  const toggleTask = id => update(t => { const item = t.find(x => x.id === id); if (item) item.open = !item.open; });
   const toggleSub = (tid, sid) => update(t => { const s = t.find(x => x.id === tid)?.subs.find(x => x.id === sid); if (s) s.open = !s.open; });
   const toggleDone = (type, tid, sid, ssid) => update(t => {
     const task = t.find(x => x.id === tid);
@@ -231,23 +257,46 @@ export default function App() {
     else if (type === "ssub") { const ss = task?.subs.find(x => x.id === sid)?.ssubs.find(x => x.id === ssid); if (ss) ss.done = !ss.done; }
   });
  
+  // add modal
+  const openAddModal = (type, taskId = null, subId = null) => {
+    if (type === "sub") update(t => { const task = t.find(x => x.id === taskId); if (task) task.open = true; });
+    if (type === "ssub") update(t => {
+      const task = t.find(x => x.id === taskId); if (task) task.open = true;
+      const sub = task?.subs.find(x => x.id === subId); if (sub) sub.open = true;
+    });
+    setAddModal({ show: true, type, taskId, subId, value: "" });
+  };
+  const confirmAdd = () => {
+    const name = addModal.value.trim(); if (!name) return;
+    update(t => {
+      if (addModal.type === "task") {
+        t.push({ id: "t" + Date.now(), num: t.length + 1, name, status: "", done: false, open: false, attachments: { notes: [], links: [], images: [] }, subs: [] });
+      } else if (addModal.type === "sub") {
+        const task = t.find(x => x.id === addModal.taskId);
+        if (task) { task.subs.push({ id: "s" + Date.now(), num: `${task.num}.${task.subs.length + 1}`, name, done: false, open: false, attachments: { notes: [], links: [], images: [] }, ssubs: [] }); task.open = true; }
+      } else if (addModal.type === "ssub") {
+        const sub = t.find(x => x.id === addModal.taskId)?.subs.find(x => x.id === addModal.subId);
+        if (sub) sub.ssubs.push({ id: "ss" + Date.now(), num: `${sub.num}.${sub.ssubs.length + 1}`, name, done: false, attachments: { notes: [], links: [], images: [] } });
+      }
+    });
+    setAddModal(m => ({ ...m, show: false, value: "" }));
+  };
+ 
+  // edit modal
+  const openEditModal = (id, name) => setEditModal({ show: true, id, value: name });
+  const confirmEdit = () => {
+    const name = editModal.value.trim(); if (!name) return;
+    update(t => { const item = getItem(t, editModal.id); if (item) item.name = name; });
+    setEditModal({ show: false, id: null, value: "" });
+  };
+ 
+  // delete (swipe left)
   const handleSwipeLeft = (id, name, resetFn) => {
     clearTimeout(toastTimer.current);
-    // reset any previous swipe
-    setToast(prev => {
-      if (prev.resetFn) prev.resetFn();
-      return { show: true, name, id, resetFn };
-    });
-    toastTimer.current = setTimeout(() => {
-      setToast(t => { if (t.resetFn) t.resetFn(); return { ...t, show: false, resetFn: null }; });
-    }, 4000);
+    setToast(prev => { if (prev.resetFn) prev.resetFn(); return { show: true, name, id, resetFn }; });
+    toastTimer.current = setTimeout(() => setToast(t => { if (t.resetFn) t.resetFn(); return { ...t, show: false, resetFn: null }; }), 4000);
   };
- 
-  const handleUndo = () => {
-    clearTimeout(toastTimer.current);
-    setToast(t => { if (t.resetFn) t.resetFn(); return { show: false, name: "", id: null, resetFn: null }; });
-  };
- 
+  const handleUndo = () => { clearTimeout(toastTimer.current); setToast(t => { if (t.resetFn) t.resetFn(); return { show: false, name: "", id: null, resetFn: null }; }); };
   const handleDelete = () => {
     clearTimeout(toastTimer.current);
     const id = toast.id;
@@ -266,46 +315,7 @@ export default function App() {
     });
   };
  
-  const startAdding = (type, taskId, subId) => {
-    setAdding({ type, taskId, subId }); setInputVal("");
-    if (type === "sub") update(t => { const task = t.find(x => x.id === taskId); if (task) task.open = true; });
-    if (type === "ssub") update(t => {
-      const task = t.find(x => x.id === taskId); if (task) task.open = true;
-      const sub = task?.subs.find(x => x.id === subId); if (sub) sub.open = true;
-    });
-  };
- 
-  const confirmAdd = () => {
-    const name = inputVal.trim(); if (!name) { setAdding({ type: null }); return; }
-    update(t => {
-      if (adding.type === "task") {
-        t.push({ id: "t" + Date.now(), num: t.length + 1, name, status: "", done: false, open: false, attachments: { notes: [], links: [], images: [] }, subs: [] });
-      } else if (adding.type === "sub") {
-        const task = t.find(x => x.id === adding.taskId);
-        if (task) { task.subs.push({ id: "s" + Date.now(), num: `${task.num}.${task.subs.length + 1}`, name, done: false, open: false, attachments: { notes: [], links: [], images: [] }, ssubs: [] }); task.open = true; }
-      } else if (adding.type === "ssub") {
-        const sub = t.find(x => x.id === adding.taskId)?.subs.find(x => x.id === adding.subId);
-        if (sub) sub.ssubs.push({ id: "ss" + Date.now(), num: `${sub.num}.${sub.ssubs.length + 1}`, name, done: false, attachments: { notes: [], links: [], images: [] } });
-      }
-    });
-    setAdding({ type: null }); setInputVal("");
-  };
- 
-  const saveAttachments = (itemId) => {
-    update(t => {
-      const item = getItem(t, itemId); if (!item) return;
-      const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-      if (urlInput.trim()) item.attachments.links.push({ url: urlInput.trim(), time: now });
-      if (noteInput.trim()) item.attachments.notes.push({ text: noteInput.trim(), time: now });
-    });
-    setUrlInput(""); setNoteInput("");
-    setSheet({ itemId, view: "view" });
-  };
- 
-  const deleteAtt = (itemId, type, idx) => {
-    update(t => { const item = getItem(t, itemId); if (item) item.attachments[type].splice(idx, 1); });
-  };
- 
+  // drag
   const onDragStart = (e, type, taskId, subId, idx) => { dragRef.current = { type, taskId, subId, idx }; e.dataTransfer.effectAllowed = "move"; };
   const onDrop = (e, type, taskId, subId, toIdx) => {
     e.preventDefault();
@@ -324,6 +334,27 @@ export default function App() {
     dragRef.current = null;
   };
  
+  // bulb / attachments
+  const handleImageFiles = files => {
+    Array.from(files).forEach(f => {
+      const r = new FileReader();
+      r.onload = ev => setImages(prev => [...prev, { src: ev.target.result, time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) }]);
+      r.readAsDataURL(f);
+    });
+  };
+  const saveAttachments = itemId => {
+    update(t => {
+      const item = getItem(t, itemId); if (!item) return;
+      const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      if (urlInput.trim()) item.attachments.links.push({ url: urlInput.trim(), time: now });
+      if (noteInput.trim()) item.attachments.notes.push({ text: noteInput.trim(), time: now });
+      images.forEach(img => item.attachments.images.push(img));
+    });
+    setUrlInput(""); setNoteInput(""); setImages([]); setShowPicOptions(false);
+    setSheet({ itemId, view: "view" });
+  };
+  const deleteAtt = (itemId, type, idx) => update(t => { const item = getItem(t, itemId); if (item) item.attachments[type].splice(idx, 1); });
+ 
   const totalTasks = tasks.length;
   const doneTasks = tasks.filter(t => t.done).length;
   const pct = totalTasks ? Math.round(doneTasks / totalTasks * 100) : 0;
@@ -335,10 +366,7 @@ export default function App() {
     <div style={S.page}>
       {/* TOPBAR */}
       <div style={S.topbar}>
-        <div>
-          <div style={S.topTitle}>Today's Tasks</div>
-          <div style={S.topSub}>Sunday, 1 Jun 2026</div>
-        </div>
+        <div><div style={S.topTitle}>Today's Tasks</div><div style={S.topSub}>Sunday, 1 Jun 2026</div></div>
         <div style={{ display: "flex", gap: 8 }}>
           <button style={S.iconBtn}>🔍</button>
           <button style={S.iconBtn}>⚙️</button>
@@ -355,7 +383,7 @@ export default function App() {
       {/* SECTION HEADER */}
       <div style={S.sectionHeader}>
         <span style={S.sectionLabel}>TASKS</span>
-        <button style={S.addHeaderBtn} onClick={() => startAdding("task")}>+ Add task</button>
+        <button style={S.addHeaderBtn} onClick={() => openAddModal("task")}>+ Add task</button>
       </div>
  
       {/* TASK LIST */}
@@ -363,22 +391,17 @@ export default function App() {
         {tasks.map((task, ti) => {
           const hasSubs = task.subs.length > 0;
           const doneSubs = task.subs.filter(s => s.done).length;
-          const isAddingSubHere = adding.type === "sub" && adding.taskId === task.id;
- 
           return (
             <div key={task.id} style={{ borderRadius: 12, overflow: "hidden", border: "0.5px solid #eee" }}
-              onDragOver={e => e.preventDefault()}
-              onDrop={e => onDrop(e, "task", null, null, ti)}>
- 
-              {/* TASK ROW — only this row swipes for the task */}
-              <SwipeRow borderRadius={0} onSwipeLeft={(resetFn) => handleSwipeLeft(task.id, task.name, resetFn)}>
+              onDragOver={e => e.preventDefault()} onDrop={e => onDrop(e, "task", null, null, ti)}>
+              <SwipeRow borderRadius={0}
+                onSwipeLeft={resetFn => handleSwipeLeft(task.id, task.name, resetFn)}
+                onSwipeRight={() => openEditModal(task.id, task.name)}>
                 <div style={{ ...S.taskCard, borderRadius: 0 }}>
                   <div style={S.taskRow}>
                     <div draggable style={S.grip} onDragStart={e => onDragStart(e, "task", null, null, ti)}>⠿</div>
                     <div style={S.numCol}><span style={S.numText}>{task.num}</span></div>
-                    {hasSubs || isAddingSubHere
-                      ? <button style={S.expandBtn} onClick={() => toggleTask(task.id)}>{task.open ? "−" : "+"}</button>
-                      : <div style={S.expandBtnGhost} />}
+                    {hasSubs ? <button style={S.expandBtn} onClick={() => toggleTask(task.id)}>{task.open ? "−" : "+"}</button> : <div style={S.expandBtnGhost} />}
                     <div style={{ ...S.checkCircle, ...(task.done ? S.checkDone : {}) }} onClick={() => toggleDone("task", task.id)} />
                     <div style={S.taskInfo} onClick={() => toggleTask(task.id)}>
                       <div style={{ ...S.taskName, ...(task.done ? S.taskNameDone : {}) }}>{task.name}</div>
@@ -393,23 +416,19 @@ export default function App() {
                 </div>
               </SwipeRow>
  
-              {/* SUBTASKS — each sub row swipes independently */}
-              {(task.open || isAddingSubHere) && (
+              {task.open && hasSubs && (
                 <div style={{ ...S.subList, background: "#fff" }}>
                   {task.subs.map((sub, si) => {
                     const hasSSubs = sub.ssubs.length > 0;
-                    const isAddingSSub = adding.type === "ssub" && adding.subId === sub.id;
                     return (
                       <div key={sub.id} onDragOver={e => e.preventDefault()} onDrop={e => onDrop(e, "sub", task.id, null, si)}>
- 
-                        {/* SUB ROW — swipes only this subtask */}
-                        <SwipeRow borderRadius={8} onSwipeLeft={(resetFn) => handleSwipeLeft(sub.id, sub.name, resetFn)}>
+                        <SwipeRow borderRadius={8}
+                          onSwipeLeft={resetFn => handleSwipeLeft(sub.id, sub.name, resetFn)}
+                          onSwipeRight={() => openEditModal(sub.id, sub.name)}>
                           <div style={S.subRow}>
                             <div draggable style={S.subGrip} onDragStart={e => onDragStart(e, "sub", task.id, null, si)}>⠿</div>
                             <div style={S.subNumCol}><span style={S.subNumText}>{sub.num}</span></div>
-                            {hasSSubs || isAddingSSub
-                              ? <button style={S.subExpandBtn} onClick={() => toggleSub(task.id, sub.id)}>{sub.open ? "−" : "+"}</button>
-                              : <div style={S.subExpandGhost} />}
+                            {hasSSubs ? <button style={S.subExpandBtn} onClick={() => toggleSub(task.id, sub.id)}>{sub.open ? "−" : "+"}</button> : <div style={S.subExpandGhost} />}
                             <div style={{ ...S.subCheck, ...(sub.done ? S.checkDone : {}) }} onClick={() => toggleDone("sub", task.id, sub.id)} />
                             <div style={S.subInfo} onClick={() => toggleSub(task.id, sub.id)}>
                               <span style={{ ...S.subName, ...(sub.done ? S.taskNameDone : {}) }}>{sub.name}</span>
@@ -418,14 +437,13 @@ export default function App() {
                           </div>
                         </SwipeRow>
  
-                        {/* SUB-SUBTASKS */}
-                        {(sub.open || isAddingSSub) && (
+                        {sub.open && hasSSubs && (
                           <div style={S.ssubList}>
                             {sub.ssubs.map((ss, ssi) => (
                               <div key={ss.id} onDragOver={e => e.preventDefault()} onDrop={e => onDrop(e, "ssub", task.id, sub.id, ssi)}>
- 
-                                {/* SSUB ROW — swipes only this sub-subtask */}
-                                <SwipeRow borderRadius={8} onSwipeLeft={(resetFn) => handleSwipeLeft(ss.id, ss.name, resetFn)}>
+                                <SwipeRow borderRadius={8}
+                                  onSwipeLeft={resetFn => handleSwipeLeft(ss.id, ss.name, resetFn)}
+                                  onSwipeRight={() => openEditModal(ss.id, ss.name)}>
                                   <div style={S.ssubRow}>
                                     <div draggable style={S.ssubGrip} onDragStart={e => onDragStart(e, "ssub", task.id, sub.id, ssi)}>⠿</div>
                                     <div style={S.ssubNumCol}><span style={S.ssubNumText}>{ss.num}</span></div>
@@ -434,39 +452,31 @@ export default function App() {
                                     <BulbBtn count={countAtt(ss)} onClick={() => setSheet({ itemId: ss.id, view: "menu" })} size={20} />
                                   </div>
                                 </SwipeRow>
- 
                               </div>
                             ))}
-                            {isAddingSSub
-                              ? <InlineInput value={inputVal} onChange={setInputVal} onConfirm={confirmAdd} onCancel={() => setAdding({ type: null })} placeholder="Sub-subtask name..." />
-                              : <button style={S.addRowBtn} onClick={() => startAdding("ssub", task.id, sub.id)}>+ Add sub-subtask</button>}
+                            <button style={S.addRowBtn} onClick={() => openAddModal("ssub", task.id, sub.id)}>+ Add sub-subtask</button>
                           </div>
                         )}
                       </div>
                     );
                   })}
-                  {isAddingSubHere
-                    ? <div style={{ margin: "0 10px 8px 52px" }}><InlineInput value={inputVal} onChange={setInputVal} onConfirm={confirmAdd} onCancel={() => setAdding({ type: null })} placeholder="Subtask name..." /></div>
-                    : <button style={{ ...S.addRowBtn, margin: "0 10px 8px 52px", width: "calc(100% - 62px)" }} onClick={() => startAdding("sub", task.id)}>+ Add subtask</button>}
+                  <button style={{ ...S.addRowBtn, margin: "0 10px 8px 52px", width: "calc(100% - 62px)" }} onClick={() => openAddModal("sub", task.id)}>+ Add subtask</button>
                 </div>
               )}
             </div>
           );
         })}
- 
-        {adding.type === "task"
-          ? <InlineInput value={inputVal} onChange={setInputVal} onConfirm={confirmAdd} onCancel={() => setAdding({ type: null })} placeholder="New task name..." big />
-          : <button style={S.mainAddBtn} onClick={() => startAdding("task")}>+ Add task</button>}
+        <button style={S.mainAddBtn} onClick={() => openAddModal("task")}>+ Add task</button>
       </div>
  
       {/* BULB SHEET */}
       {sheet && (
-        <div style={S.overlay} onClick={() => setSheet(null)}>
+        <div style={S.overlay} onClick={() => { setSheet(null); setShowPicOptions(false); setImages([]); }}>
           <div style={S.sheetBox} onClick={e => e.stopPropagation()}>
             <div style={S.sheetHandle} />
             <div style={S.sheetHeader}>
               <span style={S.sheetTitle}>💡 {sheetItem?.name}</span>
-              <button style={S.sheetClose} onClick={() => setSheet(null)}>✕</button>
+              <button style={S.sheetClose} onClick={() => { setSheet(null); setShowPicOptions(false); setImages([]); }}>✕</button>
             </div>
             <div style={{ padding: "0 16px 28px", overflowY: "auto" }}>
               {sheet.view === "menu" && (
@@ -477,7 +487,37 @@ export default function App() {
               )}
               {sheet.view === "add" && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 14, paddingTop: 8 }}>
-                  <button style={S.backBtn} onClick={() => setSheet({ ...sheet, view: "menu" })}>← Back</button>
+                  <button style={S.backBtn} onClick={() => { setSheet({ ...sheet, view: "menu" }); setShowPicOptions(false); setImages([]); }}>← Back</button>
+                  <div>
+                    <div style={S.formLabel}>📷 Picture</div>
+                    <button onClick={() => setShowPicOptions(!showPicOptions)} style={{ width: "100%", padding: "10px 14px", borderRadius: 10, border: "0.5px dashed #ddd", background: "#f9f9f9", cursor: "pointer", fontSize: 13, color: "#185FA5", fontFamily: "'DM Sans', sans-serif", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                      📷 Add Picture {showPicOptions ? "▲" : "▼"}
+                    </button>
+                    {showPicOptions && (
+                      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                        <div onClick={() => cameraRef.current.click()} style={{ flex: 1, background: "#E6F1FB", border: "0.5px solid #93C5FD", borderRadius: 12, padding: "14px 10px", display: "flex", flexDirection: "column", alignItems: "center", gap: 6, cursor: "pointer" }}>
+                          <span style={{ fontSize: 26 }}>📸</span>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: "#185FA5" }}>Take Photo</span>
+                        </div>
+                        <div onClick={() => galleryRef.current.click()} style={{ flex: 1, background: "#F3EEFF", border: "0.5px solid #C4B5FD", borderRadius: 12, padding: "14px 10px", display: "flex", flexDirection: "column", alignItems: "center", gap: 6, cursor: "pointer" }}>
+                          <span style={{ fontSize: 26 }}>🖼️</span>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: "#7C3AED" }}>Gallery</span>
+                        </div>
+                      </div>
+                    )}
+                    <input ref={cameraRef} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={e => handleImageFiles(e.target.files)} />
+                    <input ref={galleryRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={e => handleImageFiles(e.target.files)} />
+                    {images.length > 0 && (
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 6, marginTop: 8 }}>
+                        {images.map((img, i) => (
+                          <div key={i} style={{ position: "relative" }}>
+                            <img src={img.src} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8, border: "0.5px solid #eee" }} />
+                            <button onClick={() => setImages(prev => prev.filter((_, idx) => idx !== i))} style={{ position: "absolute", top: 3, right: 3, width: 18, height: 18, borderRadius: "50%", background: "#FCEBEB", border: "none", cursor: "pointer", fontSize: 10, color: "#A32D2D" }}>✕</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   <div><div style={S.formLabel}>🔗 URL Link</div><input style={S.formInput} value={urlInput} onChange={e => setUrlInput(e.target.value)} placeholder="https://..." /></div>
                   <div><div style={S.formLabel}>📝 Notes</div><textarea style={{ ...S.formInput, height: 80, resize: "none" }} value={noteInput} onChange={e => setNoteInput(e.target.value)} placeholder="Write your note here..." /></div>
                   <button style={S.saveBtn} onClick={() => saveAttachments(sheet.itemId)}>✓ Save</button>
@@ -489,6 +529,19 @@ export default function App() {
                   {attCount === 0
                     ? <div style={{ textAlign: "center", padding: "28px 0", color: "#999", fontSize: 13 }}>Nothing added yet.</div>
                     : <>
+                      {sheetItem.attachments.images?.length > 0 && (
+                        <div style={{ marginTop: 12 }}>
+                          <div style={S.viewSecTitle}>📷 Pictures</div>
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 6 }}>
+                            {sheetItem.attachments.images.map((img, i) => (
+                              <div key={i} style={{ position: "relative" }}>
+                                <img src={img.src} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8 }} />
+                                <button style={S.delBtn} onClick={() => deleteAtt(sheet.itemId, "images", i)}>✕</button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                       {sheetItem.attachments.links.length > 0 && (
                         <div style={{ marginTop: 12 }}>
                           <div style={S.viewSecTitle}>🔗 Links</div>
@@ -520,59 +573,40 @@ export default function App() {
         </div>
       )}
  
-      {/* WHITE TOAST */}
+      {/* DELETE TOAST */}
       <Toast toast={toast} onUndo={handleUndo} onDelete={handleDelete} />
-    </div>
-  );
-}
  
-function BulbBtn({ count, onClick, size }) {
-  const lit = count > 0;
-  return (
-    <button onClick={onClick} style={{
-      width: size, height: size, borderRadius: "50%",
-      border: lit ? "0.5px solid #E5A832" : "0.5px solid #ddd",
-      background: lit ? "#FAEEDA" : "#f5f5f5",
-      color: lit ? "#BA7517" : "#aaa",
-      fontSize: size * 0.5, cursor: "pointer",
-      display: "flex", alignItems: "center", justifyContent: "center",
-      flexShrink: 0, marginLeft: 6, position: "relative",
-    }}>
-      💡
-      {count > 0 && (
-        <span style={{ position: "absolute", top: -3, right: -3, width: 13, height: 13, borderRadius: "50%", background: "#BA7517", color: "#fff", fontSize: 8, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, border: "1.5px solid #fff" }}>{count}</span>
-      )}
-    </button>
-  );
-}
+      {/* ADD MODAL */}
+      <Modal
+        show={addModal.show}
+        title={addModal.type === "task" ? "➕ Add Task" : addModal.type === "sub" ? "➕ Add Subtask" : "➕ Add Sub-subtask"}
+        value={addModal.value}
+        onChange={v => setAddModal(m => ({ ...m, value: v }))}
+        onConfirm={confirmAdd}
+        onCancel={() => setAddModal(m => ({ ...m, show: false, value: "" }))}
+        confirmLabel="✓ Done"
+        confirmColor="#185FA5"
+        placeholder={addModal.type === "task" ? "What do you need to do?" : addModal.type === "sub" ? "What is the subtask?" : "What is the sub-subtask?"}
+      />
  
-function InlineInput({ value, onChange, onConfirm, onCancel, placeholder, big }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 8px", background: "#EBF4FF", borderRadius: 8, border: "0.5px solid #93C5FD" }}>
-      <input autoFocus style={{ flex: 1, background: "transparent", border: "none", outline: "none", fontSize: big ? 13 : 12, color: "#111", fontFamily: "DM Sans, sans-serif" }}
-        value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-        onKeyDown={e => { if (e.key === "Enter") onConfirm(); if (e.key === "Escape") onCancel(); }} />
-      <button onClick={onConfirm} style={{ width: 22, height: 22, borderRadius: 4, background: "#DBEAFE", border: "0.5px solid #93C5FD", cursor: "pointer", fontSize: 12, color: "#185FA5" }}>✓</button>
-      <button onClick={onCancel} style={{ width: 22, height: 22, borderRadius: 4, background: "#f0f0f0", border: "0.5px solid #ddd", cursor: "pointer", fontSize: 12, color: "#888" }}>✕</button>
-    </div>
-  );
-}
- 
-function SheetOption({ icon, title, sub, color, onClick }) {
-  return (
-    <div onClick={onClick} style={{ display: "flex", alignItems: "center", gap: 12, padding: 14, borderRadius: 12, border: "0.5px solid #eee", background: "#fafafa", cursor: "pointer" }}>
-      <div style={{ width: 36, height: 36, borderRadius: "50%", background: color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>{icon}</div>
-      <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: "#111" }}>{title}</div>
-        <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>{sub}</div>
-      </div>
-      <span style={{ color: "#ccc" }}>›</span>
+      {/* EDIT MODAL */}
+      <Modal
+        show={editModal.show}
+        title="✏️ Edit"
+        value={editModal.value}
+        onChange={v => setEditModal(m => ({ ...m, value: v }))}
+        onConfirm={confirmEdit}
+        onCancel={() => setEditModal({ show: false, id: null, value: "" })}
+        confirmLabel="✓ Save Changes"
+        confirmColor="#1D9E75"
+        placeholder="Edit name..."
+      />
     </div>
   );
 }
  
 const styles = {
-  page: { background: "#f5f5f5", minHeight: "100vh", padding: 16, maxWidth: 480, margin: "0 auto", fontFamily: "'DM Sans', sans-serif" },
+  page: { background: "#f5f5f5", minHeight: "100vh", padding: "16px 12px", maxWidth: "100%", margin: 0, fontFamily: "'DM Sans', sans-serif" },
   topbar: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 },
   topTitle: { fontSize: 18, fontWeight: 700, color: "#111", letterSpacing: -0.3 },
   topSub: { fontSize: 11, color: "#888", marginTop: 1 },
@@ -583,7 +617,7 @@ const styles = {
   statLabel: { fontSize: 10, color: "#aaa", marginTop: 1, textTransform: "uppercase", letterSpacing: "0.05em" },
   sectionHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
   sectionLabel: { fontSize: 11, fontWeight: 600, color: "#aaa", letterSpacing: "0.08em" },
-  addHeaderBtn: { fontSize: 11, color: "#185FA5", background: "#E6F1FB", border: "0.5px solid #93C5FD", padding: "4px 10px", borderRadius: 20, cursor: "pointer", fontWeight: 500 },
+  addHeaderBtn: { fontSize: 13, color: "#185FA5", background: "#E6F1FB", border: "0.5px solid #93C5FD", padding: "8px 16px", borderRadius: 20, cursor: "pointer", fontWeight: 600 },
   taskCard: { background: "#fff" },
   taskRow: { display: "flex", alignItems: "center", padding: "11px 10px 11px 0" },
   grip: { width: 24, display: "flex", alignItems: "center", justifyContent: "center", cursor: "grab", color: "#ccc", fontSize: 14, flexShrink: 0, paddingLeft: 8 },
@@ -600,22 +634,22 @@ const styles = {
   progressBg: { height: 2, background: "#f0f0f0", borderRadius: 1, marginTop: 5, overflow: "hidden" },
   progressFill: { height: "100%", background: "#1D9E75", borderRadius: 1 },
   subList: { padding: "0 10px 10px 0", display: "flex", flexDirection: "column", gap: 3 },
-  subRow: { display: "flex", alignItems: "center", padding: "6px 8px 6px 0", background: "#f9f9f9", borderRadius: 8 },
+  subRow: { display: "flex", alignItems: "center", padding: "6px 8px 6px 0", background: "#FFEDD5", borderRadius: 8, borderLeft: "3px solid #EA580C" },
   subGrip: { width: 20, display: "flex", alignItems: "center", justifyContent: "center", cursor: "grab", color: "#ccc", fontSize: 12, flexShrink: 0 },
   subNumCol: { width: 36, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  subNumText: { fontSize: 10, color: "#aaa", fontFamily: "monospace" },
+  subNumText: { fontSize: 10, color: "#EA580C", fontFamily: "monospace" },
   subExpandBtn: { width: 15, height: 15, borderRadius: 3, border: "0.5px solid #ddd", background: "transparent", cursor: "pointer", fontSize: 9, color: "#888", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" },
   subExpandGhost: { width: 15, height: 15, flexShrink: 0 },
   subCheck: { width: 14, height: 14, borderRadius: "50%", border: "1.5px solid #ddd", flexShrink: 0, cursor: "pointer", marginLeft: 8 },
   subInfo: { flex: 1, minWidth: 0, cursor: "pointer", marginLeft: 8 },
-  subName: { fontSize: 12, color: "#111", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
+  subName: { fontSize: 13, color: "#111", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
   ssubList: { padding: "3px 0 3px 52px", display: "flex", flexDirection: "column", gap: 3 },
-  ssubRow: { display: "flex", alignItems: "center", padding: "5px 8px 5px 0", background: "#fff", borderRadius: 8 },
+  ssubRow: { display: "flex", alignItems: "center", padding: "5px 8px 5px 0", background: "#FEF9C3", borderRadius: 8, borderLeft: "3px solid #CA8A04" },
   ssubGrip: { width: 16, display: "flex", alignItems: "center", justifyContent: "center", cursor: "grab", color: "#ccc", fontSize: 11, flexShrink: 0 },
   ssubNumCol: { width: 44, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  ssubNumText: { fontSize: 9, color: "#aaa", fontFamily: "monospace" },
+  ssubNumText: { fontSize: 9, color: "#CA8A04", fontFamily: "monospace" },
   ssubCheck: { width: 12, height: 12, borderRadius: "50%", border: "1.5px solid #ddd", flexShrink: 0, cursor: "pointer" },
-  ssubName: { fontSize: 11, color: "#888", flex: 1, marginLeft: 8 },
+  ssubName: { fontSize: 13, color: "#111", flex: 1, marginLeft: 8 },
   addRowBtn: { display: "flex", alignItems: "center", gap: 6, padding: "6px 8px", borderRadius: 8, border: "0.5px dashed #ddd", cursor: "pointer", background: "transparent", width: "100%", color: "#aaa", fontSize: 11, fontFamily: "DM Sans, sans-serif" },
   mainAddBtn: { display: "flex", alignItems: "center", gap: 8, padding: "11px 14px", borderRadius: 12, border: "0.5px dashed #ddd", background: "transparent", cursor: "pointer", width: "100%", color: "#aaa", fontSize: 13, fontFamily: "DM Sans, sans-serif", marginTop: 2 },
   overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.3)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 100 },
