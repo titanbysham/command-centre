@@ -556,7 +556,7 @@ function SheetOption({ icon, title, sub, color, onClick }) {
 }
  
 const styles = {
-  page: { background: "#f5f5f5", minHeight: "100vh", padding: 16, maxWidth: 480, margin: "0 auto", fontFamily: "'DM Sans', sans-serif" },
+  page: { background: "#f5f5f5", minHeight: "100vh", padding: "16px 12px", maxWidth: "100%", margin: 0, fontFamily: "'DM Sans', sans-serif" },
   topbar: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 },
   topTitle: { fontSize: 18, fontWeight: 700, color: "#111", letterSpacing: -0.3 },
   topSub: { fontSize: 11, color: "#888", marginTop: 1 },
