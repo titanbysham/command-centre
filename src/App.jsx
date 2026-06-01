@@ -1,4 +1,10 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import { createClient } from "@supabase/supabase-js";
+ 
+const SUPABASE_URL = "https://ucxbwnjbktfzncqxevpa.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVjeGJ3bmpia3Rmem5jcXhldnBhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyMjkyNDMsImV4cCI6MjA5NTgwNTI0M30.xm9ARh3MfSnI03s9zyEyWqE0wKCa3iRRqRjCCehxN0c";
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+const DB_ID = 1;
  
 const initialTasks = [
   {
@@ -283,6 +289,7 @@ export default function App() {
   const [addModal, setAddModal] = useState({ show: false, type: "task", taskId: null, subId: null, value: "", url: "", images: [], showPicOpts: false });
   const [editModal, setEditModal] = useState({ show: false, id: null, value: "" });
   const [fullImg, setFullImg] = useState(null);
+  const [loading, setLoading] = useState(true);
   const toastTimer = useRef(null);
   const cameraRef = useRef(null);
   const galleryRef = useRef(null);
@@ -304,6 +311,29 @@ export default function App() {
   };
  
   const update = fn => setTasks(prev => { const next = JSON.parse(JSON.stringify(prev)); fn(next); return next; });
+ 
+  // Load tasks from Supabase on first open
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const { data, error } = await supabase.from("tasks").select("data").eq("id", DB_ID).single();
+        if (data && data.data) setTasks(JSON.parse(data.data));
+      } catch (e) { console.log("Load error", e); }
+      setLoading(false);
+    };
+    load();
+  }, []);
+ 
+  // Save tasks to Supabase whenever they change
+  useEffect(() => {
+    if (loading) return;
+    const save = async () => {
+      try {
+        await supabase.from("tasks").upsert({ id: DB_ID, data: JSON.stringify(tasks) });
+      } catch (e) { console.log("Save error", e); }
+    };
+    save();
+  }, [tasks]);
  
   const toggleTask = id => update(t => { const x = t.find(x => x.id === id); if (x) x.open = !x.open; });
   const toggleSub = (tid, sid) => update(t => { const s = t.find(x => x.id === tid)?.subs.find(x => x.id === sid); if (s) s.open = !s.open; });
@@ -395,6 +425,14 @@ export default function App() {
   const sheetItem = sheet ? getItem(tasks, sheet.itemId) : null;
   const attCount = sheetItem ? countAtt(sheetItem) : 0;
   const S = styles;
+ 
+  if (loading) return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: "#f5f5f5", flexDirection: "column", gap: 16, fontFamily: "'DM Sans',sans-serif" }}>
+      <div style={{ fontSize: 40 }}>⚡</div>
+      <div style={{ fontSize: 16, fontWeight: 600, color: "#111" }}>Loading your tasks...</div>
+      <div style={{ fontSize: 13, color: "#aaa" }}>Connecting to database</div>
+    </div>
+  );
  
   return (
     <div style={S.page}>
