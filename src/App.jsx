@@ -238,12 +238,14 @@ export default function App() {
   const [images, setImages] = useState([]);
   const [showPicOptions, setShowPicOptions] = useState(false);
   const [toast, setToast] = useState({ show: false, name: "", id: null, resetFn: null });
-  const [addModal, setAddModal] = useState({ show: false, type: "task", taskId: null, subId: null, value: "" });
+  const [addModal, setAddModal] = useState({ show: false, type: "task", taskId: null, subId: null, value: "", url: "", images: [], showPicOpts: false });
   const [editModal, setEditModal] = useState({ show: false, id: null, value: "" });
   const toastTimer = useRef(null);
   const dragRef = useRef(null);
   const cameraRef = useRef(null);
   const galleryRef = useRef(null);
+  const modalCameraRef = useRef(null);
+  const modalGalleryRef = useRef(null);
  
   const update = fn => setTasks(prev => { const next = JSON.parse(JSON.stringify(prev)); fn(next); return next; });
  
@@ -264,22 +266,24 @@ export default function App() {
       const task = t.find(x => x.id === taskId); if (task) task.open = true;
       const sub = task?.subs.find(x => x.id === subId); if (sub) sub.open = true;
     });
-    setAddModal({ show: true, type, taskId, subId, value: "" });
+    setAddModal({ show: true, type, taskId, subId, value: "", url: "", images: [], showPicOpts: false });
   };
   const confirmAdd = () => {
     const name = addModal.value.trim(); if (!name) return;
+    const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     update(t => {
+      const att = { notes: [], links: addModal.url.trim() ? [{ url: addModal.url.trim(), time: now }] : [], images: addModal.images };
       if (addModal.type === "task") {
-        t.push({ id: "t" + Date.now(), num: t.length + 1, name, status: "", done: false, open: false, attachments: { notes: [], links: [], images: [] }, subs: [] });
+        t.push({ id: "t" + Date.now(), num: t.length + 1, name, status: "", done: false, open: false, attachments: att, subs: [] });
       } else if (addModal.type === "sub") {
         const task = t.find(x => x.id === addModal.taskId);
-        if (task) { task.subs.push({ id: "s" + Date.now(), num: `${task.num}.${task.subs.length + 1}`, name, done: false, open: false, attachments: { notes: [], links: [], images: [] }, ssubs: [] }); task.open = true; }
+        if (task) { task.subs.push({ id: "s" + Date.now(), num: `${task.num}.${task.subs.length + 1}`, name, done: false, open: false, attachments: att, ssubs: [] }); task.open = true; }
       } else if (addModal.type === "ssub") {
         const sub = t.find(x => x.id === addModal.taskId)?.subs.find(x => x.id === addModal.subId);
-        if (sub) sub.ssubs.push({ id: "ss" + Date.now(), num: `${sub.num}.${sub.ssubs.length + 1}`, name, done: false, attachments: { notes: [], links: [], images: [] } });
+        if (sub) sub.ssubs.push({ id: "ss" + Date.now(), num: `${sub.num}.${sub.ssubs.length + 1}`, name, done: false, attachments: att });
       }
     });
-    setAddModal(m => ({ ...m, show: false, value: "" }));
+    setAddModal(m => ({ ...m, show: false, value: "", url: "", images: [], showPicOpts: false }));
   };
  
   // edit modal
@@ -316,9 +320,19 @@ export default function App() {
   };
  
   // drag
-  const onDragStart = (e, type, taskId, subId, idx) => { dragRef.current = { type, taskId, subId, idx }; e.dataTransfer.effectAllowed = "move"; };
+  const onDragStart = (e, type, taskId, subId, idx) => {
+    dragRef.current = { type, taskId, subId, idx };
+    e.dataTransfer.effectAllowed = "move";
+    e.stopPropagation();
+  };
+  const onDragOver = (e, type, taskId, subId, idx) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = "move";
+  };
   const onDrop = (e, type, taskId, subId, toIdx) => {
     e.preventDefault();
+    e.stopPropagation();
     const d = dragRef.current;
     if (!d || d.type !== type || d.idx === toIdx) return;
     update(t => {
@@ -339,6 +353,14 @@ export default function App() {
     Array.from(files).forEach(f => {
       const r = new FileReader();
       r.onload = ev => setImages(prev => [...prev, { src: ev.target.result, time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) }]);
+      r.readAsDataURL(f);
+    });
+  };
+ 
+  const handleModalImageFiles = files => {
+    Array.from(files).forEach(f => {
+      const r = new FileReader();
+      r.onload = ev => setAddModal(m => ({ ...m, images: [...m.images, { src: ev.target.result, time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) }] }));
       r.readAsDataURL(f);
     });
   };
@@ -392,14 +414,19 @@ export default function App() {
           const hasSubs = task.subs.length > 0;
           const doneSubs = task.subs.filter(s => s.done).length;
           return (
-            <div key={task.id} style={{ borderRadius: 12, overflow: "hidden", border: "0.5px solid #eee" }}
-              onDragOver={e => e.preventDefault()} onDrop={e => onDrop(e, "task", null, null, ti)}>
+            <div key={task.id}
+              style={{ borderRadius: 12, overflow: "hidden", border: "0.5px solid #eee" }}
+              onDragOver={e => onDragOver(e, "task", null, null, ti)}
+              onDrop={e => onDrop(e, "task", null, null, ti)}>
               <SwipeRow borderRadius={0}
                 onSwipeLeft={resetFn => handleSwipeLeft(task.id, task.name, resetFn)}
                 onSwipeRight={() => openEditModal(task.id, task.name)}>
                 <div style={{ ...S.taskCard, borderRadius: 0 }}>
                   <div style={S.taskRow}>
-                    <div draggable style={S.grip} onDragStart={e => onDragStart(e, "task", null, null, ti)}>⠿</div>
+                    <div draggable style={S.grip}
+                      onDragStart={e => onDragStart(e, "task", null, null, ti)}
+                      onMouseDown={e => e.stopPropagation()}
+                      onTouchStart={e => e.stopPropagation()}>⠿</div>
                     <div style={S.numCol}><span style={S.numText}>{task.num}</span></div>
                     {hasSubs ? <button style={S.expandBtn} onClick={() => toggleTask(task.id)}>{task.open ? "−" : "+"}</button> : <div style={S.expandBtnGhost} />}
                     <div style={{ ...S.checkCircle, ...(task.done ? S.checkDone : {}) }} onClick={() => toggleDone("task", task.id)} />
@@ -421,14 +448,19 @@ export default function App() {
                   {task.subs.map((sub, si) => {
                     const hasSSubs = sub.ssubs.length > 0;
                     return (
-                      <div key={sub.id} onDragOver={e => e.preventDefault()} onDrop={e => onDrop(e, "sub", task.id, null, si)}>
+                      <div key={sub.id}
+                        onDragOver={e => onDragOver(e, "sub", task.id, null, si)}
+                        onDrop={e => onDrop(e, "sub", task.id, null, si)}>
                         <SwipeRow borderRadius={8}
                           onSwipeLeft={resetFn => handleSwipeLeft(sub.id, sub.name, resetFn)}
                           onSwipeRight={() => openEditModal(sub.id, sub.name)}>
                           <div style={S.subRow}>
-                            <div draggable style={S.subGrip} onDragStart={e => onDragStart(e, "sub", task.id, null, si)}>⠿</div>
+                            <div draggable style={S.subGrip}
+                              onDragStart={e => onDragStart(e, "sub", task.id, null, si)}
+                              onMouseDown={e => e.stopPropagation()}
+                              onTouchStart={e => e.stopPropagation()}>⠿</div>
                             <div style={S.subNumCol}><span style={S.subNumText}>{sub.num}</span></div>
-                            {hasSSubs ? <button style={S.subExpandBtn} onClick={() => toggleSub(task.id, sub.id)}>{sub.open ? "−" : "+"}</button> : <div style={S.subExpandGhost} />}
+                            <button style={S.subExpandBtn} onClick={() => toggleSub(task.id, sub.id)}>{sub.open ? "−" : "+"}</button>
                             <div style={{ ...S.subCheck, ...(sub.done ? S.checkDone : {}) }} onClick={() => toggleDone("sub", task.id, sub.id)} />
                             <div style={S.subInfo} onClick={() => toggleSub(task.id, sub.id)}>
                               <span style={{ ...S.subName, ...(sub.done ? S.taskNameDone : {}) }}>{sub.name}</span>
@@ -437,15 +469,20 @@ export default function App() {
                           </div>
                         </SwipeRow>
  
-                        {sub.open && hasSSubs && (
+                        {(sub.open || !hasSSubs) && (
                           <div style={S.ssubList}>
-                            {sub.ssubs.map((ss, ssi) => (
-                              <div key={ss.id} onDragOver={e => e.preventDefault()} onDrop={e => onDrop(e, "ssub", task.id, sub.id, ssi)}>
+                            {sub.open && sub.ssubs.map((ss, ssi) => (
+                              <div key={ss.id}
+                                onDragOver={e => onDragOver(e, "ssub", task.id, sub.id, ssi)}
+                                onDrop={e => onDrop(e, "ssub", task.id, sub.id, ssi)}>
                                 <SwipeRow borderRadius={8}
                                   onSwipeLeft={resetFn => handleSwipeLeft(ss.id, ss.name, resetFn)}
                                   onSwipeRight={() => openEditModal(ss.id, ss.name)}>
                                   <div style={S.ssubRow}>
-                                    <div draggable style={S.ssubGrip} onDragStart={e => onDragStart(e, "ssub", task.id, sub.id, ssi)}>⠿</div>
+                                    <div draggable style={S.ssubGrip}
+                                      onDragStart={e => onDragStart(e, "ssub", task.id, sub.id, ssi)}
+                                      onMouseDown={e => e.stopPropagation()}
+                                      onTouchStart={e => e.stopPropagation()}>⠿</div>
                                     <div style={S.ssubNumCol}><span style={S.ssubNumText}>{ss.num}</span></div>
                                     <div style={{ ...S.ssubCheck, ...(ss.done ? S.checkDone : {}) }} onClick={() => toggleDone("ssub", task.id, sub.id, ss.id)} />
                                     <span style={{ ...S.ssubName, ...(ss.done ? S.taskNameDone : {}) }}>{ss.name}</span>
@@ -577,17 +614,85 @@ export default function App() {
       <Toast toast={toast} onUndo={handleUndo} onDelete={handleDelete} />
  
       {/* ADD MODAL */}
-      <Modal
-        show={addModal.show}
-        title={addModal.type === "task" ? "➕ Add Task" : addModal.type === "sub" ? "➕ Add Subtask" : "➕ Add Sub-subtask"}
-        value={addModal.value}
-        onChange={v => setAddModal(m => ({ ...m, value: v }))}
-        onConfirm={confirmAdd}
-        onCancel={() => setAddModal(m => ({ ...m, show: false, value: "" }))}
-        confirmLabel="✓ Done"
-        confirmColor="#185FA5"
-        placeholder={addModal.type === "task" ? "What do you need to do?" : addModal.type === "sub" ? "What is the subtask?" : "What is the sub-subtask?"}
-      />
+      {addModal.show && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 998 }} onClick={() => setAddModal(m => ({ ...m, show: false }))}>
+          <div style={{ background: "#fff", borderRadius: 20, padding: "24px 20px", width: "88%", maxWidth: 360, display: "flex", flexDirection: "column", gap: 14, boxShadow: "0 12px 48px rgba(0,0,0,0.18)", maxHeight: "90vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
+ 
+            {/* HEADER */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span style={{ fontSize: 18, fontWeight: 700, color: "#111" }}>
+                {addModal.type === "task" ? "➕ Add Task" : addModal.type === "sub" ? "➕ Add Subtask" : "➕ Add Sub-subtask"}
+              </span>
+              <button onClick={() => setAddModal(m => ({ ...m, show: false }))} style={{ width: 30, height: 30, borderRadius: "50%", border: "0.5px solid #eee", background: "#f5f5f5", cursor: "pointer", fontSize: 16, color: "#888", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+            </div>
+ 
+            {/* NAME INPUT */}
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: "#aaa", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
+                {addModal.type === "task" ? "Task Name" : addModal.type === "sub" ? "Subtask Name" : "Sub-subtask Name"}
+              </div>
+              <textarea
+                autoFocus
+                value={addModal.value}
+                onChange={e => setAddModal(m => ({ ...m, value: e.target.value }))}
+                onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); confirmAdd(); } if (e.key === "Escape") setAddModal(m => ({ ...m, show: false })); }}
+                placeholder={addModal.type === "task" ? "What do you need to do?" : addModal.type === "sub" ? "What is the subtask?" : "What is the sub-subtask?"}
+                style={{ width: "100%", background: "#f9f9f9", border: "0.5px solid #ddd", borderRadius: 10, padding: "12px 14px", fontSize: 15, color: "#111", fontFamily: "'DM Sans', sans-serif", outline: "none", resize: "none", height: 80, lineHeight: 1.6, boxSizing: "border-box" }}
+              />
+            </div>
+ 
+            {/* PICTURE */}
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: "#aaa", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>📷 Picture</div>
+              <button onClick={() => setAddModal(m => ({ ...m, showPicOpts: !m.showPicOpts }))} style={{ width: "100%", padding: "10px 14px", borderRadius: 10, border: "0.5px dashed #ddd", background: "#f9f9f9", cursor: "pointer", fontSize: 13, color: "#185FA5", fontFamily: "'DM Sans', sans-serif", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                📷 Add Picture {addModal.showPicOpts ? "▲" : "▼"}
+              </button>
+              {addModal.showPicOpts && (
+                <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                  <div onClick={() => modalCameraRef.current.click()} style={{ flex: 1, background: "#E6F1FB", border: "0.5px solid #93C5FD", borderRadius: 12, padding: "12px 8px", display: "flex", flexDirection: "column", alignItems: "center", gap: 6, cursor: "pointer" }}>
+                    <span style={{ fontSize: 24 }}>📸</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#185FA5" }}>Take Photo</span>
+                  </div>
+                  <div onClick={() => modalGalleryRef.current.click()} style={{ flex: 1, background: "#F3EEFF", border: "0.5px solid #C4B5FD", borderRadius: 12, padding: "12px 8px", display: "flex", flexDirection: "column", alignItems: "center", gap: 6, cursor: "pointer" }}>
+                    <span style={{ fontSize: 24 }}>🖼️</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#7C3AED" }}>Gallery</span>
+                  </div>
+                </div>
+              )}
+              <input ref={modalCameraRef} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={e => handleModalImageFiles(e.target.files)} />
+              <input ref={modalGalleryRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={e => handleModalImageFiles(e.target.files)} />
+              {addModal.images.length > 0 && (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 6, marginTop: 8 }}>
+                  {addModal.images.map((img, i) => (
+                    <div key={i} style={{ position: "relative" }}>
+                      <img src={img.src} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8, border: "0.5px solid #eee" }} />
+                      <button onClick={() => setAddModal(m => ({ ...m, images: m.images.filter((_, idx) => idx !== i) }))} style={{ position: "absolute", top: 3, right: 3, width: 18, height: 18, borderRadius: "50%", background: "#FCEBEB", border: "none", cursor: "pointer", fontSize: 10, color: "#A32D2D" }}>✕</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+ 
+            {/* URL */}
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: "#aaa", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>🔗 URL Link</div>
+              <input
+                value={addModal.url}
+                onChange={e => setAddModal(m => ({ ...m, url: e.target.value }))}
+                placeholder="https://..."
+                style={{ width: "100%", background: "#f9f9f9", border: "0.5px solid #eee", borderRadius: 10, padding: "10px 12px", fontSize: 13, color: "#111", fontFamily: "'DM Sans', sans-serif", outline: "none", boxSizing: "border-box" }}
+              />
+            </div>
+ 
+            {/* DONE BUTTON */}
+            <button
+              onClick={confirmAdd}
+              style={{ width: "100%", padding: 14, borderRadius: 12, border: "none", background: addModal.value.trim() ? "#185FA5" : "#ddd", color: addModal.value.trim() ? "#fff" : "#aaa", fontSize: 15, fontWeight: 700, cursor: addModal.value.trim() ? "pointer" : "default", fontFamily: "'DM Sans', sans-serif", transition: "background .2s" }}>
+              ✓ Done
+            </button>
+          </div>
+        </div>
+      )}
  
       {/* EDIT MODAL */}
       <Modal
@@ -634,20 +739,20 @@ const styles = {
   progressBg: { height: 2, background: "#f0f0f0", borderRadius: 1, marginTop: 5, overflow: "hidden" },
   progressFill: { height: "100%", background: "#1D9E75", borderRadius: 1 },
   subList: { padding: "0 10px 10px 0", display: "flex", flexDirection: "column", gap: 3 },
-  subRow: { display: "flex", alignItems: "center", padding: "6px 8px 6px 0", background: "#FFEDD5", borderRadius: 8, borderLeft: "3px solid #EA580C" },
+  subRow: { display: "flex", alignItems: "center", padding: "6px 8px 6px 0", background: "#CCFBF1", borderRadius: 8, borderLeft: "3px solid #0D9488" },
   subGrip: { width: 20, display: "flex", alignItems: "center", justifyContent: "center", cursor: "grab", color: "#ccc", fontSize: 12, flexShrink: 0 },
   subNumCol: { width: 36, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  subNumText: { fontSize: 10, color: "#EA580C", fontFamily: "monospace" },
+  subNumText: { fontSize: 10, color: "#0D9488", fontFamily: "monospace" },
   subExpandBtn: { width: 15, height: 15, borderRadius: 3, border: "0.5px solid #ddd", background: "transparent", cursor: "pointer", fontSize: 9, color: "#888", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" },
   subExpandGhost: { width: 15, height: 15, flexShrink: 0 },
   subCheck: { width: 14, height: 14, borderRadius: "50%", border: "1.5px solid #ddd", flexShrink: 0, cursor: "pointer", marginLeft: 8 },
   subInfo: { flex: 1, minWidth: 0, cursor: "pointer", marginLeft: 8 },
   subName: { fontSize: 13, color: "#111", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
   ssubList: { padding: "3px 0 3px 52px", display: "flex", flexDirection: "column", gap: 3 },
-  ssubRow: { display: "flex", alignItems: "center", padding: "5px 8px 5px 0", background: "#FEF9C3", borderRadius: 8, borderLeft: "3px solid #CA8A04" },
+  ssubRow: { display: "flex", alignItems: "center", padding: "5px 8px 5px 0", background: "#E0F2FE", borderRadius: 8, borderLeft: "3px solid #0284C7" },
   ssubGrip: { width: 16, display: "flex", alignItems: "center", justifyContent: "center", cursor: "grab", color: "#ccc", fontSize: 11, flexShrink: 0 },
   ssubNumCol: { width: 44, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  ssubNumText: { fontSize: 9, color: "#CA8A04", fontFamily: "monospace" },
+  ssubNumText: { fontSize: 9, color: "#0284C7", fontFamily: "monospace" },
   ssubCheck: { width: 12, height: 12, borderRadius: "50%", border: "1.5px solid #ddd", flexShrink: 0, cursor: "pointer" },
   ssubName: { fontSize: 13, color: "#111", flex: 1, marginLeft: 8 },
   addRowBtn: { display: "flex", alignItems: "center", gap: 6, padding: "6px 8px", borderRadius: 8, border: "0.5px dashed #ddd", cursor: "pointer", background: "transparent", width: "100%", color: "#aaa", fontSize: 11, fontFamily: "DM Sans, sans-serif" },
