@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef } from "react";
  
 const initialTasks = [
   {
@@ -83,56 +83,86 @@ function pillStyle(bg, color) {
   return { background: bg, color, fontSize: 9, padding: "2px 7px", borderRadius: 20, fontWeight: 600 };
 }
  
-function SwipeRow({ children, onSwipeLeft, style = {} }) {
+// SwipeRow — stopPropagation so parent card doesn't also swipe
+function SwipeRow({ children, onSwipeLeft, borderRadius = 12 }) {
   const startX = useRef(0);
   const startY = useRef(0);
   const currentX = useRef(0);
   const isSwiping = useRef(false);
   const isHorizontal = useRef(null);
-  const elRef = useRef(null);
-  const THRESHOLD = 60;
+  const innerRef = useRef(null);
+  const THRESHOLD = 55;
  
-  const onStart = (x, y) => {
-    startX.current = x; startY.current = y;
-    isSwiping.current = true; isHorizontal.current = null;
-    if (elRef.current) elRef.current.style.transition = "none";
+  const onStart = (x, y, e) => {
+    // Don't steal events from buttons/interactive elements
+    if (e.target.closest("button") || e.target.closest("[data-no-swipe]")) return;
+    startX.current = x;
+    startY.current = y;
+    isSwiping.current = true;
+    isHorizontal.current = null;
+    if (innerRef.current) innerRef.current.style.transition = "none";
   };
-  const onMove = (x, y) => {
+ 
+  const onMove = (x, y, e) => {
     if (!isSwiping.current) return;
-    const dx = x - startX.current, dy = y - startY.current;
-    if (isHorizontal.current === null && (Math.abs(dx) > 8 || Math.abs(dy) > 8))
-      isHorizontal.current = Math.abs(dx) > Math.abs(dy);
+    const dx = x - startX.current;
+    const dy = y - startY.current;
+    if (isHorizontal.current === null) {
+      if (Math.abs(dx) > 6 || Math.abs(dy) > 6) {
+        isHorizontal.current = Math.abs(dx) > Math.abs(dy);
+      }
+    }
     if (!isHorizontal.current) return;
+    // prevent page scroll when swiping horizontally
+    if (e && e.cancelable) e.preventDefault();
     currentX.current = Math.min(0, dx);
-    if (elRef.current) elRef.current.style.transform = `translateX(${currentX.current}px)`;
+    if (innerRef.current) innerRef.current.style.transform = `translateX(${currentX.current}px)`;
   };
+ 
   const onEnd = () => {
-    if (!isSwiping.current || !isHorizontal.current) { isSwiping.current = false; return; }
+    if (!isSwiping.current || !isHorizontal.current) {
+      isSwiping.current = false;
+      return;
+    }
     isSwiping.current = false;
-    if (elRef.current) elRef.current.style.transition = "transform 0.2s ease";
+    if (innerRef.current) innerRef.current.style.transition = "transform 0.2s ease";
     if (currentX.current < -THRESHOLD) {
-      if (elRef.current) elRef.current.style.transform = "translateX(-80px)";
+      if (innerRef.current) innerRef.current.style.transform = "translateX(-80px)";
       onSwipeLeft && onSwipeLeft(() => {
-        if (elRef.current) { elRef.current.style.transition = "transform 0.2s ease"; elRef.current.style.transform = "translateX(0)"; }
+        if (innerRef.current) {
+          innerRef.current.style.transition = "transform 0.2s ease";
+          innerRef.current.style.transform = "translateX(0)";
+        }
       });
     } else {
-      if (elRef.current) elRef.current.style.transform = "translateX(0)";
+      if (innerRef.current) innerRef.current.style.transform = "translateX(0)";
     }
     currentX.current = 0;
   };
  
   return (
-    <div style={{ position: "relative", overflow: "hidden", borderRadius: style.borderRadius || 12, ...style }}>
-      <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 80, background: "#FCEBEB", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "#A32D2D", fontWeight: 600, gap: 4 }}>
+    <div style={{ position: "relative", overflow: "hidden", borderRadius }}>
+      {/* Red delete bg */}
+      <div style={{
+        position: "absolute", right: 0, top: 0, bottom: 0, width: 80,
+        background: "#FCEBEB", display: "flex", alignItems: "center",
+        justifyContent: "center", fontSize: 12, color: "#A32D2D",
+        fontWeight: 600, gap: 4, borderRadius,
+      }}>
         🗑️ Delete
       </div>
-      <div ref={elRef} style={{ position: "relative", zIndex: 1, touchAction: "pan-y" }}
-        onMouseDown={e => onStart(e.clientX, e.clientY)}
-        onMouseMove={e => { if (isSwiping.current) onMove(e.clientX, e.clientY); }}
-        onMouseUp={onEnd} onMouseLeave={onEnd}
-        onTouchStart={e => onStart(e.touches[0].clientX, e.touches[0].clientY)}
-        onTouchMove={e => onMove(e.touches[0].clientX, e.touches[0].clientY)}
-        onTouchEnd={onEnd}>
+      {/* Swipeable content */}
+      <div
+        ref={innerRef}
+        style={{ position: "relative", zIndex: 1, touchAction: "pan-y" }}
+        onMouseDown={e => onStart(e.clientX, e.clientY, e)}
+        onMouseMove={e => { if (isSwiping.current) onMove(e.clientX, e.clientY, e); }}
+        onMouseUp={onEnd}
+        onMouseLeave={onEnd}
+        onTouchStart={e => onStart(e.touches[0].clientX, e.touches[0].clientY, e)}
+        onTouchMove={e => onMove(e.touches[0].clientX, e.touches[0].clientY, e)}
+        onTouchEnd={onEnd}
+      >
         {children}
       </div>
     </div>
@@ -187,7 +217,11 @@ export default function App() {
  
   const handleSwipeLeft = (id, name, resetFn) => {
     clearTimeout(toastTimer.current);
-    setToast(prev => { if (prev.resetFn) prev.resetFn(); return { show: true, name, id, resetFn }; });
+    // reset any previous swipe
+    setToast(prev => {
+      if (prev.resetFn) prev.resetFn();
+      return { show: true, name, id, resetFn };
+    });
     toastTimer.current = setTimeout(() => {
       setToast(t => { if (t.resetFn) t.resetFn(); return { ...t, show: false, resetFn: null }; });
     }, 4000);
@@ -283,6 +317,7 @@ export default function App() {
  
   return (
     <div style={S.page}>
+      {/* TOPBAR */}
       <div style={S.topbar}>
         <div>
           <div style={S.topTitle}>Today's Tasks</div>
@@ -294,17 +329,20 @@ export default function App() {
         </div>
       </div>
  
+      {/* STATS */}
       <div style={S.statsRow}>
         <div style={S.statCard}><div style={{ ...S.statNum, color: "#185FA5" }}>{totalTasks}</div><div style={S.statLabel}>Total</div></div>
         <div style={S.statCard}><div style={{ ...S.statNum, color: "#1D9E75" }}>{doneTasks}</div><div style={S.statLabel}>Done</div></div>
         <div style={S.statCard}><div style={{ ...S.statNum, color: "#BA7517" }}>{pct}%</div><div style={S.statLabel}>Progress</div></div>
       </div>
  
+      {/* SECTION HEADER */}
       <div style={S.sectionHeader}>
         <span style={S.sectionLabel}>TASKS</span>
         <button style={S.addHeaderBtn} onClick={() => startAdding("task")}>+ Add task</button>
       </div>
  
+      {/* TASK LIST */}
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {tasks.map((task, ti) => {
           const hasSubs = task.subs.length > 0;
@@ -312,75 +350,91 @@ export default function App() {
           const isAddingSubHere = adding.type === "sub" && adding.taskId === task.id;
  
           return (
-            <SwipeRow key={task.id} style={{ borderRadius: 12 }}
-              onSwipeLeft={(resetFn) => handleSwipeLeft(task.id, task.name, resetFn)}>
-              <div style={S.taskCard} onDragOver={e => e.preventDefault()} onDrop={e => onDrop(e, "task", null, null, ti)}>
-                <div style={S.taskRow}>
-                  <div draggable style={S.grip} onDragStart={e => onDragStart(e, "task", null, null, ti)}>⠿</div>
-                  <div style={S.numCol}><span style={S.numText}>{task.num}</span></div>
-                  {hasSubs || isAddingSubHere ? <button style={S.expandBtn} onClick={() => toggleTask(task.id)}>{task.open ? "−" : "+"}</button> : <div style={S.expandBtnGhost} />}
-                  <div style={{ ...S.checkCircle, ...(task.done ? S.checkDone : {}) }} onClick={() => toggleDone("task", task.id)} />
-                  <div style={S.taskInfo} onClick={() => toggleTask(task.id)}>
-                    <div style={{ ...S.taskName, ...(task.done ? S.taskNameDone : {}) }}>{task.name}</div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2, flexWrap: "wrap" }}>
-                      <Pill status={task.status} done={task.done} />
-                      {hasSubs && <span style={S.subCount}>{doneSubs}/{task.subs.length} subtasks</span>}
+            <div key={task.id} style={{ borderRadius: 12, overflow: "hidden", border: "0.5px solid #eee" }}
+              onDragOver={e => e.preventDefault()}
+              onDrop={e => onDrop(e, "task", null, null, ti)}>
+ 
+              {/* TASK ROW — only this row swipes for the task */}
+              <SwipeRow borderRadius={0} onSwipeLeft={(resetFn) => handleSwipeLeft(task.id, task.name, resetFn)}>
+                <div style={{ ...S.taskCard, borderRadius: 0 }}>
+                  <div style={S.taskRow}>
+                    <div draggable style={S.grip} onDragStart={e => onDragStart(e, "task", null, null, ti)}>⠿</div>
+                    <div style={S.numCol}><span style={S.numText}>{task.num}</span></div>
+                    {hasSubs || isAddingSubHere
+                      ? <button style={S.expandBtn} onClick={() => toggleTask(task.id)}>{task.open ? "−" : "+"}</button>
+                      : <div style={S.expandBtnGhost} />}
+                    <div style={{ ...S.checkCircle, ...(task.done ? S.checkDone : {}) }} onClick={() => toggleDone("task", task.id)} />
+                    <div style={S.taskInfo} onClick={() => toggleTask(task.id)}>
+                      <div style={{ ...S.taskName, ...(task.done ? S.taskNameDone : {}) }}>{task.name}</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2, flexWrap: "wrap" }}>
+                        <Pill status={task.status} done={task.done} />
+                        {hasSubs && <span style={S.subCount}>{doneSubs}/{task.subs.length} subtasks</span>}
+                      </div>
+                      {hasSubs && <div style={S.progressBg}><div style={{ ...S.progressFill, width: `${Math.round(doneSubs / task.subs.length * 100)}%` }} /></div>}
                     </div>
-                    {hasSubs && <div style={S.progressBg}><div style={{ ...S.progressFill, width: `${Math.round(doneSubs / task.subs.length * 100)}%` }} /></div>}
+                    <BulbBtn count={countAtt(task)} onClick={() => setSheet({ itemId: task.id, view: "menu" })} size={28} />
                   </div>
-                  <BulbBtn count={countAtt(task)} onClick={() => setSheet({ itemId: task.id, view: "menu" })} size={28} />
                 </div>
+              </SwipeRow>
  
-                {(task.open || isAddingSubHere) && (
-                  <div style={S.subList}>
-                    {task.subs.map((sub, si) => {
-                      const hasSSubs = sub.ssubs.length > 0;
-                      const isAddingSSub = adding.type === "ssub" && adding.subId === sub.id;
-                      return (
-                        <div key={sub.id} onDragOver={e => e.preventDefault()} onDrop={e => onDrop(e, "sub", task.id, null, si)}>
-                          <SwipeRow style={{ borderRadius: 8 }} onSwipeLeft={(resetFn) => handleSwipeLeft(sub.id, sub.name, resetFn)}>
-                            <div style={S.subRow}>
-                              <div draggable style={S.subGrip} onDragStart={e => onDragStart(e, "sub", task.id, null, si)}>⠿</div>
-                              <div style={S.subNumCol}><span style={S.subNumText}>{sub.num}</span></div>
-                              {hasSSubs || isAddingSSub ? <button style={S.subExpandBtn} onClick={() => toggleSub(task.id, sub.id)}>{sub.open ? "−" : "+"}</button> : <div style={S.subExpandGhost} />}
-                              <div style={{ ...S.subCheck, ...(sub.done ? S.checkDone : {}) }} onClick={() => toggleDone("sub", task.id, sub.id)} />
-                              <div style={S.subInfo} onClick={() => toggleSub(task.id, sub.id)}>
-                                <span style={{ ...S.subName, ...(sub.done ? S.taskNameDone : {}) }}>{sub.name}</span>
+              {/* SUBTASKS — each sub row swipes independently */}
+              {(task.open || isAddingSubHere) && (
+                <div style={{ ...S.subList, background: "#fff" }}>
+                  {task.subs.map((sub, si) => {
+                    const hasSSubs = sub.ssubs.length > 0;
+                    const isAddingSSub = adding.type === "ssub" && adding.subId === sub.id;
+                    return (
+                      <div key={sub.id} onDragOver={e => e.preventDefault()} onDrop={e => onDrop(e, "sub", task.id, null, si)}>
+ 
+                        {/* SUB ROW — swipes only this subtask */}
+                        <SwipeRow borderRadius={8} onSwipeLeft={(resetFn) => handleSwipeLeft(sub.id, sub.name, resetFn)}>
+                          <div style={S.subRow}>
+                            <div draggable style={S.subGrip} onDragStart={e => onDragStart(e, "sub", task.id, null, si)}>⠿</div>
+                            <div style={S.subNumCol}><span style={S.subNumText}>{sub.num}</span></div>
+                            {hasSSubs || isAddingSSub
+                              ? <button style={S.subExpandBtn} onClick={() => toggleSub(task.id, sub.id)}>{sub.open ? "−" : "+"}</button>
+                              : <div style={S.subExpandGhost} />}
+                            <div style={{ ...S.subCheck, ...(sub.done ? S.checkDone : {}) }} onClick={() => toggleDone("sub", task.id, sub.id)} />
+                            <div style={S.subInfo} onClick={() => toggleSub(task.id, sub.id)}>
+                              <span style={{ ...S.subName, ...(sub.done ? S.taskNameDone : {}) }}>{sub.name}</span>
+                            </div>
+                            <BulbBtn count={countAtt(sub)} onClick={() => setSheet({ itemId: sub.id, view: "menu" })} size={24} />
+                          </div>
+                        </SwipeRow>
+ 
+                        {/* SUB-SUBTASKS */}
+                        {(sub.open || isAddingSSub) && (
+                          <div style={S.ssubList}>
+                            {sub.ssubs.map((ss, ssi) => (
+                              <div key={ss.id} onDragOver={e => e.preventDefault()} onDrop={e => onDrop(e, "ssub", task.id, sub.id, ssi)}>
+ 
+                                {/* SSUB ROW — swipes only this sub-subtask */}
+                                <SwipeRow borderRadius={8} onSwipeLeft={(resetFn) => handleSwipeLeft(ss.id, ss.name, resetFn)}>
+                                  <div style={S.ssubRow}>
+                                    <div draggable style={S.ssubGrip} onDragStart={e => onDragStart(e, "ssub", task.id, sub.id, ssi)}>⠿</div>
+                                    <div style={S.ssubNumCol}><span style={S.ssubNumText}>{ss.num}</span></div>
+                                    <div style={{ ...S.ssubCheck, ...(ss.done ? S.checkDone : {}) }} onClick={() => toggleDone("ssub", task.id, sub.id, ss.id)} />
+                                    <span style={{ ...S.ssubName, ...(ss.done ? S.taskNameDone : {}) }}>{ss.name}</span>
+                                    <BulbBtn count={countAtt(ss)} onClick={() => setSheet({ itemId: ss.id, view: "menu" })} size={20} />
+                                  </div>
+                                </SwipeRow>
+ 
                               </div>
-                              <BulbBtn count={countAtt(sub)} onClick={() => setSheet({ itemId: sub.id, view: "menu" })} size={24} />
-                            </div>
-                          </SwipeRow>
- 
-                          {(sub.open || isAddingSSub) && (
-                            <div style={S.ssubList}>
-                              {sub.ssubs.map((ss, ssi) => (
-                                <div key={ss.id} onDragOver={e => e.preventDefault()} onDrop={e => onDrop(e, "ssub", task.id, sub.id, ssi)}>
-                                  <SwipeRow style={{ borderRadius: 8 }} onSwipeLeft={(resetFn) => handleSwipeLeft(ss.id, ss.name, resetFn)}>
-                                    <div style={S.ssubRow}>
-                                      <div draggable style={S.ssubGrip} onDragStart={e => onDragStart(e, "ssub", task.id, sub.id, ssi)}>⠿</div>
-                                      <div style={S.ssubNumCol}><span style={S.ssubNumText}>{ss.num}</span></div>
-                                      <div style={{ ...S.ssubCheck, ...(ss.done ? S.checkDone : {}) }} onClick={() => toggleDone("ssub", task.id, sub.id, ss.id)} />
-                                      <span style={{ ...S.ssubName, ...(ss.done ? S.taskNameDone : {}) }}>{ss.name}</span>
-                                      <BulbBtn count={countAtt(ss)} onClick={() => setSheet({ itemId: ss.id, view: "menu" })} size={20} />
-                                    </div>
-                                  </SwipeRow>
-                                </div>
-                              ))}
-                              {isAddingSSub
-                                ? <InlineInput value={inputVal} onChange={setInputVal} onConfirm={confirmAdd} onCancel={() => setAdding({ type: null })} placeholder="Sub-subtask name..." />
-                                : <button style={S.addRowBtn} onClick={() => startAdding("ssub", task.id, sub.id)}>+ Add sub-subtask</button>}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                    {isAddingSubHere
-                      ? <div style={{ margin: "0 10px 8px 52px" }}><InlineInput value={inputVal} onChange={setInputVal} onConfirm={confirmAdd} onCancel={() => setAdding({ type: null })} placeholder="Subtask name..." /></div>
-                      : <button style={{ ...S.addRowBtn, margin: "0 10px 8px 52px", width: "calc(100% - 62px)" }} onClick={() => startAdding("sub", task.id)}>+ Add subtask</button>}
-                  </div>
-                )}
-              </div>
-            </SwipeRow>
+                            ))}
+                            {isAddingSSub
+                              ? <InlineInput value={inputVal} onChange={setInputVal} onConfirm={confirmAdd} onCancel={() => setAdding({ type: null })} placeholder="Sub-subtask name..." />
+                              : <button style={S.addRowBtn} onClick={() => startAdding("ssub", task.id, sub.id)}>+ Add sub-subtask</button>}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {isAddingSubHere
+                    ? <div style={{ margin: "0 10px 8px 52px" }}><InlineInput value={inputVal} onChange={setInputVal} onConfirm={confirmAdd} onCancel={() => setAdding({ type: null })} placeholder="Subtask name..." /></div>
+                    : <button style={{ ...S.addRowBtn, margin: "0 10px 8px 52px", width: "calc(100% - 62px)" }} onClick={() => startAdding("sub", task.id)}>+ Add subtask</button>}
+                </div>
+              )}
+            </div>
           );
         })}
  
@@ -389,6 +443,7 @@ export default function App() {
           : <button style={S.mainAddBtn} onClick={() => startAdding("task")}>+ Add task</button>}
       </div>
  
+      {/* BULB SHEET */}
       {sheet && (
         <div style={S.overlay} onClick={() => setSheet(null)}>
           <div style={S.sheetBox} onClick={e => e.stopPropagation()}>
@@ -449,6 +504,7 @@ export default function App() {
         </div>
       )}
  
+      {/* WHITE TOAST */}
       <Toast toast={toast} onUndo={handleUndo} onDelete={handleDelete} />
     </div>
   );
@@ -512,7 +568,7 @@ const styles = {
   sectionHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
   sectionLabel: { fontSize: 11, fontWeight: 600, color: "#aaa", letterSpacing: "0.08em" },
   addHeaderBtn: { fontSize: 11, color: "#185FA5", background: "#E6F1FB", border: "0.5px solid #93C5FD", padding: "4px 10px", borderRadius: 20, cursor: "pointer", fontWeight: 500 },
-  taskCard: { background: "#fff", borderRadius: 12, overflow: "visible" },
+  taskCard: { background: "#fff" },
   taskRow: { display: "flex", alignItems: "center", padding: "11px 10px 11px 0" },
   grip: { width: 24, display: "flex", alignItems: "center", justifyContent: "center", cursor: "grab", color: "#ccc", fontSize: 14, flexShrink: 0, paddingLeft: 8 },
   numCol: { width: 28, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 },
@@ -561,4 +617,3 @@ const styles = {
   noteCard: { background: "#f9f9f9", borderRadius: 8, padding: "10px 12px", fontSize: 13, color: "#111", lineHeight: 1.5 },
   delBtn: { position: "absolute", top: 6, right: 6, width: 18, height: 18, borderRadius: "50%", background: "#FCEBEB", border: "none", cursor: "pointer", fontSize: 10, color: "#A32D2D" },
 };
- 
