@@ -295,7 +295,26 @@ export default function App() {
   const [toast, setToast] = useState({ show: false, name: "", id: null, resetFn: null });
   const [addModal, setAddModal] = useState({ show: false, type: "task", taskId: null, subId: null, value: "", url: "", images: [], showPicOpts: false });
   const [editModal, setEditModal] = useState({ show: false, id: null, value: "" });
-  const [fullImg, setFullImg] = useState(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [logbook, setLogbook] = useState(() => {
+    try { const l = localStorage.getItem("command_centre_logbook"); return l ? JSON.parse(l) : []; } catch (e) { return []; }
+  });
+  const [logView, setLogView] = useState(null); // null or a logbook entry
+ 
+  const saveToLogbook = () => {
+    const entry = {
+      id: Date.now(),
+      date: new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }),
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      tasks: JSON.parse(JSON.stringify(tasks)),
+    };
+    const updated = [entry, ...logbook].slice(0, 10);
+    setLogbook(updated);
+    localStorage.setItem("command_centre_logbook", JSON.stringify(updated));
+    // also save to Supabase logbook
+    supabase.from("tasks").upsert({ id: 2, data: JSON.stringify(updated) }).catch(() => {});
+    alert("✅ Saved to Logbook!");
+  };
   const [loading, setLoading] = useState(false);
   const toastTimer = useRef(null);
   const cameraRef = useRef(null);
@@ -430,8 +449,27 @@ export default function App() {
   };
  
   // attachments
-  const handleImageFiles = files => { Array.from(files).forEach(f => { const r = new FileReader(); r.onload = ev => setImages(prev => [...prev, { src: ev.target.result }]); r.readAsDataURL(f); }); };
-  const handleModalImageFiles = files => { Array.from(files).forEach(f => { const r = new FileReader(); r.onload = ev => setAddModal(m => ({ ...m, images: [...m.images, { src: ev.target.result }] })); r.readAsDataURL(f); }); };
+  const compressImage = (file, callback) => {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const MAX = 400;
+        let w = img.width, h = img.height;
+        if (w > h) { if (w > MAX) { h = h * MAX / w; w = MAX; } }
+        else { if (h > MAX) { w = w * MAX / h; h = MAX; } }
+        canvas.width = w; canvas.height = h;
+        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+        callback(canvas.toDataURL("image/jpeg", 0.6));
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
+ 
+  const handleImageFiles = files => { Array.from(files).forEach(f => { compressImage(f, src => setImages(prev => [...prev, { src }])); }); };
+  const handleModalImageFiles = files => { Array.from(files).forEach(f => { compressImage(f, src => setAddModal(m => ({ ...m, images: [...m.images, { src }] }))); }); };
   const saveAttachments = itemId => {
     update(t => {
       const item = getItem(t, itemId); if (!item) return;
@@ -460,7 +498,7 @@ export default function App() {
         <div><div style={S.topTitle}>Today's Tasks</div><div style={S.topSub}>Sunday, 1 Jun 2026</div></div>
         <div style={{ display: "flex", gap: 8 }}>
           <button style={S.iconBtn}>🔍</button>
-          <button style={S.iconBtn}>⚙️</button>
+          <button style={S.iconBtn} onClick={() => setShowSettings(true)}>⚙️</button>
         </div>
       </div>
  
@@ -667,6 +705,119 @@ export default function App() {
         </div>
       )}
  
+      {/* SETTINGS SHEET */}
+      {showSettings && !logView && (
+        <div style={S.overlay} onClick={() => setShowSettings(false)}>
+          <div style={S.sheetBox} onClick={e => e.stopPropagation()}>
+            <div style={S.sheetHandle} />
+            <div style={S.sheetHeader}>
+              <span style={S.sheetTitle}>⚙️ Settings</span>
+              <button style={S.sheetClose} onClick={() => setShowSettings(false)}>✕</button>
+            </div>
+            <div style={{ padding: "0 16px 32px", display: "flex", flexDirection: "column", gap: 12 }}>
+              {/* SAVE BUTTON */}
+              <div onClick={saveToLogbook} style={{ display: "flex", alignItems: "center", gap: 12, padding: 16, borderRadius: 14, background: "#E6F1FB", border: "0.5px solid #93C5FD", cursor: "pointer" }}>
+                <div style={{ width: 40, height: 40, borderRadius: "50%", background: "#185FA5", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>💾</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "#185FA5" }}>Save Current Work</div>
+                  <div style={{ fontSize: 11, color: "#5B8BC9", marginTop: 2 }}>Saves all tasks, subtasks, pictures, URLs and notes to Logbook</div>
+                </div>
+              </div>
+ 
+              {/* LOGBOOK BUTTON */}
+              <div onClick={() => setLogView("list")} style={{ display: "flex", alignItems: "center", gap: 12, padding: 16, borderRadius: 14, background: "#FAEEDA", border: "0.5px solid #E5A832", cursor: "pointer" }}>
+                <div style={{ width: 40, height: 40, borderRadius: "50%", background: "#BA7517", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>📖</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "#BA7517" }}>Logbook</div>
+                  <div style={{ fontSize: 11, color: "#B07A2A", marginTop: 2 }}>{logbook.length > 0 ? `${logbook.length} save(s) stored` : "No saves yet"}</div>
+                </div>
+                <span style={{ color: "#ccc" }}>›</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+ 
+      {/* LOGBOOK LIST */}
+      {showSettings && logView === "list" && (
+        <div style={S.overlay} onClick={() => { setShowSettings(false); setLogView(null); }}>
+          <div style={S.sheetBox} onClick={e => e.stopPropagation()}>
+            <div style={S.sheetHandle} />
+            <div style={S.sheetHeader}>
+              <span style={S.sheetTitle}>📖 Logbook</span>
+              <button style={S.sheetClose} onClick={() => { setShowSettings(false); setLogView(null); }}>✕</button>
+            </div>
+            <div style={{ padding: "0 16px 32px", overflowY: "auto" }}>
+              <button style={S.backBtn} onClick={() => setLogView(null)}>← Back</button>
+              {logbook.length === 0
+                ? <div style={{ textAlign: "center", padding: "32px 0", color: "#999", fontSize: 13 }}>No saves yet. Press 💾 Save to create your first backup!</div>
+                : logbook.map((entry, i) => (
+                  <div key={entry.id} onClick={() => setLogView(entry)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 12px", borderRadius: 12, background: i === 0 ? "#E6F1FB" : "#f9f9f9", border: `0.5px solid ${i === 0 ? "#93C5FD" : "#eee"}`, marginBottom: 8, cursor: "pointer" }}>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#111" }}>📅 {entry.date} · {entry.time}</div>
+                      <div style={{ fontSize: 11, color: "#888", marginTop: 3 }}>{entry.tasks.length} task(s) saved {i === 0 ? "· Latest" : ""}</div>
+                    </div>
+                    <span style={{ color: "#ccc" }}>›</span>
+                  </div>
+                ))
+              }
+            </div>
+          </div>
+        </div>
+      )}
+ 
+      {/* LOGBOOK ENTRY VIEW */}
+      {showSettings && logView && logView !== "list" && (
+        <div style={S.overlay} onClick={() => { setShowSettings(false); setLogView(null); }}>
+          <div style={S.sheetBox} onClick={e => e.stopPropagation()}>
+            <div style={S.sheetHandle} />
+            <div style={S.sheetHeader}>
+              <span style={S.sheetTitle}>📅 {logView.date} · {logView.time}</span>
+              <button style={S.sheetClose} onClick={() => { setShowSettings(false); setLogView(null); }}>✕</button>
+            </div>
+            <div style={{ padding: "0 16px 32px", overflowY: "auto" }}>
+              <button style={S.backBtn} onClick={() => setLogView("list")}>← Back</button>
+ 
+              {/* RESTORE BUTTON */}
+              <div onClick={() => {
+                if (window.confirm(`Restore save from ${logView.date} at ${logView.time}? Your current tasks will be replaced.`)) {
+                  const restored = JSON.parse(JSON.stringify(logView.tasks));
+                  setTasks(restored);
+                  localStorage.setItem("command_centre_tasks", JSON.stringify(restored));
+                  supabase.from("tasks").upsert({ id: DB_ID, data: JSON.stringify(restored) }).catch(() => {});
+                  setShowSettings(false);
+                  setLogView(null);
+                  alert("✅ Restored successfully!");
+                }
+              }} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px 16px", borderRadius: 12, background: "#E1F5EE", border: "0.5px solid #1D9E75", cursor: "pointer", marginBottom: 14 }}>
+                <span style={{ fontSize: 16 }}>♻️</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "#085041" }}>Restore This Version</span>
+              </div>
+ 
+              <div style={{ fontSize: 11, color: "#aaa", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>
+                {logView.tasks.length} task(s) in this save
+              </div>
+              {logView.tasks.map((task, i) => (
+                <div key={i} style={{ marginBottom: 10, background: "#f9f9f9", borderRadius: 10, padding: "10px 12px", border: "0.5px solid #eee" }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#111" }}>{task.num}. {task.name}</div>
+                  {task.subs.length > 0 && task.subs.map((sub, j) => (
+                    <div key={j} style={{ marginTop: 6, paddingLeft: 12, borderLeft: "2px solid #ddd" }}>
+                      <div style={{ fontSize: 12, color: "#555" }}>{sub.num} {sub.name}</div>
+                      {sub.ssubs.length > 0 && sub.ssubs.map((ss, k) => (
+                        <div key={k} style={{ paddingLeft: 12, borderLeft: "2px solid #eee", marginTop: 3 }}>
+                          <div style={{ fontSize: 11, color: "#888" }}>{ss.num} {ss.name}</div>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                  {countAtt(task) > 0 && <div style={{ fontSize: 10, color: "#BA7517", marginTop: 6 }}>💡 {countAtt(task)} attachment(s)</div>}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+ 
       {/* DELETE TOAST */}
       <Toast toast={toast} onUndo={handleUndo} onDelete={handleDelete} />
  
@@ -795,3 +946,4 @@ const styles = {
   noteCard: { background: "#f9f9f9", borderRadius: 8, padding: "10px 12px", fontSize: 13, color: "#111", lineHeight: 1.5 },
   delBtn: { position: "absolute", top: 6, right: 6, width: 18, height: 18, borderRadius: "50%", background: "#FCEBEB", border: "none", cursor: "pointer", fontSize: 10, color: "#A32D2D" },
 };
+ 
