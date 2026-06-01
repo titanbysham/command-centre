@@ -286,7 +286,7 @@ export default function App() {
   const [toast, setToast] = useState({ show: false, name: "", id: null, resetFn: null });
   const [addModal, setAddModal] = useState({ show: false, type: "task", taskId: null, subId: null, value: "", url: "", images: [], showPicOpts: false });
   const [editModal, setEditModal] = useState({ show: false, id: null, value: "" });
-  const toastTimer = useRef(null);
+  const [fullImg, setFullImg] = useState(null);
   const cameraRef = useRef(null);
   const galleryRef = useRef(null);
   const modalCameraRef = useRef(null);
@@ -650,7 +650,7 @@ export default function App() {
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 6, marginTop: 8 }}>
                         {images.map((img, i) => (
                           <div key={i} style={{ position: "relative" }}>
-                            <img src={img.src} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8, border: "0.5px solid #eee" }} />
+                            <img src={img.src} onClick={() => setFullImg(img.src)} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8, border: "0.5px solid #eee", cursor: "pointer" }} />
                             <button onClick={() => setImages(prev => prev.filter((_, idx) => idx !== i))} style={{ position: "absolute", top: 3, right: 3, width: 18, height: 18, borderRadius: "50%", background: "#FCEBEB", border: "none", cursor: "pointer", fontSize: 10, color: "#A32D2D" }}>✕</button>
                           </div>
                         ))}
@@ -674,7 +674,7 @@ export default function App() {
                           <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 6 }}>
                             {sheetItem.attachments.images.map((img, i) => (
                               <div key={i} style={{ position: "relative" }}>
-                                <img src={img.src} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8 }} />
+                                <img src={img.src} onClick={() => setFullImg(img.src)} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8, cursor: "pointer" }} />
                                 <button style={S.delBtn} onClick={() => deleteAtt(sheet.itemId, "images", i)}>✕</button>
                               </div>
                             ))}
@@ -755,7 +755,7 @@ export default function App() {
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 6, marginTop: 8 }}>
                   {addModal.images.map((img, i) => (
                     <div key={i} style={{ position: "relative" }}>
-                      <img src={img.src} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8 }} />
+                      <img src={img.src} onClick={() => setFullImg(img.src)} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8, cursor: "pointer" }} />
                       <button onClick={() => setAddModal(m => ({ ...m, images: m.images.filter((_, idx) => idx !== i) }))} style={{ position: "absolute", top: 3, right: 3, width: 18, height: 18, borderRadius: "50%", background: "#FCEBEB", border: "none", cursor: "pointer", fontSize: 10, color: "#A32D2D" }}>✕</button>
                     </div>
                   ))}
@@ -771,6 +771,15 @@ export default function App() {
               ✓ Done
             </button>
           </div>
+        </div>
+      )}
+ 
+      {/* FULLSCREEN IMAGE VIEWER */}
+      {fullImg && (
+        <div onClick={() => setFullImg(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.95)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column" }}>
+          <button onClick={() => setFullImg(null)} style={{ position: "absolute", top: 20, right: 20, width: 40, height: 40, borderRadius: "50%", background: "rgba(255,255,255,0.15)", border: "none", cursor: "pointer", fontSize: 20, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+          <img src={fullImg} style={{ maxWidth: "95vw", maxHeight: "85vh", objectFit: "contain", borderRadius: 12 }} />
+          <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 12, marginTop: 16 }}>Tap anywhere to close</div>
         </div>
       )}
  
