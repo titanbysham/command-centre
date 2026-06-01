@@ -279,7 +279,14 @@ function SheetOption({ icon, title, sub, color, onClick }) {
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function App() {
-  const [tasks, setTasks] = useState(initialTasks);
+  // Load from localStorage instantly — no loading screen needed
+  const [tasks, setTasks] = useState(() => {
+    try {
+      const local = localStorage.getItem("command_centre_tasks");
+      if (local) return JSON.parse(local);
+    } catch (e) {}
+    return initialTasks;
+  });
   const [sheet, setSheet] = useState(null);
   const [urlInput, setUrlInput] = useState("");
   const [noteInput, setNoteInput] = useState("");
@@ -312,29 +319,28 @@ export default function App() {
 
   const update = fn => setTasks(prev => { const next = JSON.parse(JSON.stringify(prev)); fn(next); return next; });
 
-  // Load tasks — try Supabase first, fall back to localStorage if offline
+  // When internet comes back — push local data TO Supabase (local always wins)
   useEffect(() => {
-    const load = async () => {
+    const sync = async () => {
       try {
-        const { data, error } = await supabase.from("tasks").select("data").eq("id", DB_ID).single();
-        if (data && data.data) {
-          const parsed = JSON.parse(data.data);
-          setTasks(parsed);
-          // also save to localStorage as backup
-          localStorage.setItem("command_centre_tasks", data.data);
+        const local = localStorage.getItem("command_centre_tasks");
+        if (local) {
+          // push local data to Supabase — local always wins
+          await supabase.from("tasks").upsert({ id: DB_ID, data: local });
         } else {
-          // no data in supabase — check localStorage
-          const local = localStorage.getItem("command_centre_tasks");
-          if (local) setTasks(JSON.parse(local));
+          // no local data — pull from Supabase
+          const { data } = await supabase.from("tasks").select("data").eq("id", DB_ID).single();
+          if (data && data.data) {
+            setTasks(JSON.parse(data.data));
+            localStorage.setItem("command_centre_tasks", data.data);
+          }
         }
       } catch (e) {
-        // offline — load from localStorage
-        const local = localStorage.getItem("command_centre_tasks");
-        if (local) setTasks(JSON.parse(local));
+        // offline — no action needed, localStorage already loaded
       }
       setLoading(false);
     };
-    load();
+    sync();
   }, []);
 
   // Save tasks — always save to localStorage immediately, try Supabase if online
@@ -445,14 +451,6 @@ export default function App() {
   const sheetItem = sheet ? getItem(tasks, sheet.itemId) : null;
   const attCount = sheetItem ? countAtt(sheetItem) : 0;
   const S = styles;
-
-  if (loading) return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: "#f5f5f5", flexDirection: "column", gap: 16, fontFamily: "'DM Sans',sans-serif" }}>
-      <div style={{ fontSize: 40 }}>⚡</div>
-      <div style={{ fontSize: 16, fontWeight: 600, color: "#111" }}>Loading your tasks...</div>
-      <div style={{ fontSize: 13, color: "#aaa" }}>{navigator.onLine ? "Connecting to database" : "Loading offline data"}</div>
-    </div>
-  );
 
   return (
     <div style={S.page}>
