@@ -224,7 +224,10 @@ export default function App() {
     if (loading) return;
     const tasksJson = JSON.stringify(tasks);
     localStorage.setItem("command_centre_tasks", tasksJson);
-    if (tasks.length > 0) supabase.from("tasks").upsert({ id: DB_ID, data: tasksJson }).catch(() => {});
+    const save = async () => {
+      if (tasks.length > 0) { try { await supabase.from("tasks").upsert({ id: DB_ID, data: tasksJson }); } catch (e) {} }
+    };
+    save();
   }, [tasks]);
  
   const update = fn => setTasks(prev => { const next = JSON.parse(JSON.stringify(prev)); fn(next); return next; });
@@ -606,7 +609,7 @@ export default function App() {
                   const restored = JSON.parse(JSON.stringify(logView.tasks));
                   setTasks(restored);
                   localStorage.setItem("command_centre_tasks", JSON.stringify(restored));
-                  supabase.from("tasks").upsert({ id: DB_ID, data: JSON.stringify(restored) }).catch(() => {});
+                  try { await supabase.from("tasks").upsert({ id: DB_ID, data: JSON.stringify(restored) }); } catch (e) {}
                   setShowSettings(false); setLogView(null);
                   alert("✅ Restored!");
                 }
@@ -756,4 +759,3 @@ const styles = {
   noteCard: { background: "#f9f9f9", borderRadius: 8, padding: "10px 12px", fontSize: 13, color: "#111", lineHeight: 1.5 },
   delBtn: { position: "absolute", top: 6, right: 6, width: 18, height: 18, borderRadius: "50%", background: "#FCEBEB", border: "none", cursor: "pointer", fontSize: 10, color: "#A32D2D" },
 };
- 
