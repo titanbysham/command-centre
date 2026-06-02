@@ -212,24 +212,15 @@ export default function App() {
     load();
   }, []);
  
-  // Load logbook - always from Supabase first, localStorage as fallback
+  // Load logbook
   useEffect(() => {
     const loadLogbook = async () => {
       try {
         const { data } = await supabase.from("tasks").select("data").eq("id", 2).single();
         if (data && data.data) {
           const parsed = JSON.parse(data.data);
-          if (parsed.length > 0) {
-            setLogbook(parsed);
-            localStorage.setItem("command_centre_logbook", data.data);
-            return;
-          }
+          if (parsed.length > 0) setLogbook(parsed);
         }
-      } catch (e) {}
-      // fallback to localStorage
-      try {
-        const l = localStorage.getItem("command_centre_logbook");
-        if (l) { const parsed = JSON.parse(l); if (parsed.length > 0) setLogbook(parsed); }
       } catch (e) {}
     };
     loadLogbook();
@@ -253,17 +244,18 @@ export default function App() {
   const getSSubListRef = (subId) => { if (!ssubListRefs.current[subId]) ssubListRefs.current[subId] = []; return ssubListRefs.current[subId]; };
  
   const saveToLogbook = async () => {
-    const entry = { id: Date.now(), date: new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }), time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), tasks: JSON.parse(JSON.stringify(tasks)) };
-    const updated = [entry, ...logbook].slice(0, 10);
+    const entry = {
+      id: Date.now(),
+      date: new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }),
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      tasks: JSON.parse(JSON.stringify(tasks))
+    };
+    const updated = [entry]; // only keep latest save
     setLogbook(updated);
-    localStorage.setItem("command_centre_logbook", JSON.stringify(updated));
     try {
       const { error } = await supabase.from("tasks").upsert({ id: 2, data: JSON.stringify(updated) });
-      if (error) { alert("❌ Error: " + error.message); }
-      else {
-        await supabase.from("tasks").upsert({ id: DB_ID, data: JSON.stringify(tasks) });
-        alert("✅ Saved to Logbook!");
-      }
+      if (error) alert("❌ Error: " + error.message);
+      else alert("✅ Saved!");
     } catch (e) { alert("❌ Failed: " + e.message); }
   };
  
@@ -780,4 +772,3 @@ const styles = {
   noteCard: { background: "#f9f9f9", borderRadius: 8, padding: "10px 12px", fontSize: 13, color: "#111", lineHeight: 1.5 },
   delBtn: { position: "absolute", top: 6, right: 6, width: 18, height: 18, borderRadius: "50%", background: "#FCEBEB", border: "none", cursor: "pointer", fontSize: 10, color: "#A32D2D" },
 };
- 
