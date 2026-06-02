@@ -215,13 +215,19 @@ export default function App() {
   // Load logbook
   useEffect(() => {
     const loadLogbook = async () => {
+      // First load from localStorage instantly
+      try {
+        const l = localStorage.getItem("command_centre_logbook");
+        if (l) { const parsed = JSON.parse(l); if (parsed.length > 0) setLogbook(parsed); }
+      } catch (e) {}
+      // Then try Supabase
       try {
         const { data } = await supabase.from("tasks").select("data").eq("id", 2).single();
-        if (data && data.data) setLogbook(JSON.parse(data.data));
-        else { const l = localStorage.getItem("command_centre_logbook"); if (l) setLogbook(JSON.parse(l)); }
-      } catch (e) {
-        try { const l = localStorage.getItem("command_centre_logbook"); if (l) setLogbook(JSON.parse(l)); } catch (e2) {}
-      }
+        if (data && data.data) {
+          const parsed = JSON.parse(data.data);
+          if (parsed.length > 0) { setLogbook(parsed); localStorage.setItem("command_centre_logbook", data.data); }
+        }
+      } catch (e) {}
     };
     loadLogbook();
   }, []);
@@ -768,3 +774,4 @@ const styles = {
   noteCard: { background: "#f9f9f9", borderRadius: 8, padding: "10px 12px", fontSize: 13, color: "#111", lineHeight: 1.5 },
   delBtn: { position: "absolute", top: 6, right: 6, width: 18, height: 18, borderRadius: "50%", background: "#FCEBEB", border: "none", cursor: "pointer", fontSize: 10, color: "#A32D2D" },
 };
+ 
