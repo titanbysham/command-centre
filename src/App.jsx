@@ -6,51 +6,6 @@ const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 const DB_ID = 1;
  
-const initialTasks = [
-  {
-    id: "t1", num: 1, name: "Water the flower", status: "done", done: true, open: true,
-    attachments: { notes: [], links: [], images: [] },
-    subs: [
-      {
-        id: "s1_1", num: "1.1", name: "Fill up water in bucket", done: true, open: true,
-        attachments: { notes: [], links: [], images: [] },
-        ssubs: [
-          { id: "ss1_1_1", num: "1.1.1", name: "Find bucket at store", done: true, attachments: { notes: [], links: [], images: [] } },
-          { id: "ss1_1_2", num: "1.1.2", name: "Clean the bucket first", done: false, attachments: { notes: [], links: [], images: [] } },
-        ],
-      },
-      { id: "s1_2", num: "1.2", name: "Water each pot carefully", done: false, open: false, attachments: { notes: [], links: [], images: [] }, ssubs: [] },
-    ],
-  },
-  {
-    id: "t2", num: 2, name: "Open shop on social media", status: "ongoing", done: false, open: true,
-    attachments: { notes: [], links: [], images: [] },
-    subs: [
-      {
-        id: "s2_1", num: "2.1", name: "Create logo", done: false, open: true,
-        attachments: { notes: [], links: [], images: [] },
-        ssubs: [
-          { id: "ss2_1_1", num: "2.1.1", name: "Use ChatGPT for prompt ideas", done: false, attachments: { notes: [], links: [], images: [] } },
-          { id: "ss2_1_2", num: "2.1.2", name: "Export final logo as PNG", done: false, attachments: { notes: [], links: [], images: [] } },
-        ],
-      },
-      { id: "s2_2", num: "2.2", name: "Write bio and description", done: false, open: false, attachments: { notes: [], links: [], images: [] }, ssubs: [] },
-    ],
-  },
-  {
-    id: "t3", num: 3, name: "Review finance tracker", status: "blocked", done: false, open: false,
-    attachments: { notes: [], links: [], images: [] },
-    subs: [
-      {
-        id: "s3_1", num: "3.1", name: "Check last month expenses", done: false, open: false,
-        attachments: { notes: [], links: [], images: [] },
-        ssubs: [{ id: "ss3_1_1", num: "3.1.1", name: "Download bank statement", done: false, attachments: { notes: [], links: [], images: [] } }],
-      },
-    ],
-  },
-  { id: "t4", num: 4, name: "Reply to client WhatsApp", status: "", done: false, open: false, attachments: { notes: [], links: [], images: [] }, subs: [] },
-];
- 
 function renumberAll(tasks) {
   tasks.forEach((t, i) => {
     t.num = i + 1;
@@ -85,144 +40,78 @@ function Pill({ status, done }) {
   return null;
 }
  
-// ─── SWIPE ROW ────────────────────────────────────────────────────────────────
-// Handles BOTH swipe left (delete) and swipe right (edit)
-// The key fix: touchAction on the swipeable div must be "none" so we control all touch
 function SwipeRow({ children, onSwipeLeft, onSwipeRight, borderRadius = 12 }) {
   const ref = useRef(null);
   const state = useRef({ startX: 0, startY: 0, dx: 0, active: false, dir: null });
   const THRESHOLD = 55;
- 
-  const start = (x, y) => {
-    state.current = { startX: x, startY: y, dx: 0, active: true, dir: null };
-    if (ref.current) ref.current.style.transition = "none";
-  };
- 
+  const start = (x, y) => { state.current = { startX: x, startY: y, dx: 0, active: true, dir: null }; if (ref.current) ref.current.style.transition = "none"; };
   const move = (x, y, e) => {
-    const s = state.current;
-    if (!s.active) return;
-    const dx = x - s.startX;
-    const dy = y - s.startY;
-    if (!s.dir) {
-      if (Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
-      s.dir = Math.abs(dx) > Math.abs(dy) ? "h" : "v";
-    }
-    if (s.dir === "v") return; // vertical scroll — don't interfere
+    const s = state.current; if (!s.active) return;
+    const dx = x - s.startX, dy = y - s.startY;
+    if (!s.dir) { if (Math.abs(dx) < 4 && Math.abs(dy) < 4) return; s.dir = Math.abs(dx) > Math.abs(dy) ? "h" : "v"; }
+    if (s.dir === "v") return;
     if (e && e.cancelable) e.preventDefault();
-    s.dx = dx;
-    if (ref.current) ref.current.style.transform = `translateX(${dx}px)`;
+    s.dx = dx; if (ref.current) ref.current.style.transform = `translateX(${dx}px)`;
   };
- 
   const end = () => {
-    const s = state.current;
-    s.active = false;
-    if (s.dir !== "h") return;
+    const s = state.current; s.active = false; if (s.dir !== "h") return;
     if (ref.current) ref.current.style.transition = "transform 0.22s ease";
-    if (s.dx < -THRESHOLD) {
-      if (ref.current) ref.current.style.transform = "translateX(-80px)";
-      onSwipeLeft && onSwipeLeft(() => {
-        if (ref.current) { ref.current.style.transition = "transform 0.22s ease"; ref.current.style.transform = "translateX(0)"; }
-      });
-    } else if (s.dx > THRESHOLD) {
-      if (ref.current) ref.current.style.transform = "translateX(0)";
-      onSwipeRight && onSwipeRight();
-    } else {
-      if (ref.current) ref.current.style.transform = "translateX(0)";
-    }
+    if (s.dx < -THRESHOLD) { if (ref.current) ref.current.style.transform = "translateX(-80px)"; onSwipeLeft && onSwipeLeft(() => { if (ref.current) { ref.current.style.transition = "transform 0.22s ease"; ref.current.style.transform = "translateX(0)"; } }); }
+    else if (s.dx > THRESHOLD) { if (ref.current) ref.current.style.transform = "translateX(0)"; onSwipeRight && onSwipeRight(); }
+    else { if (ref.current) ref.current.style.transform = "translateX(0)"; }
   };
- 
   return (
     <div style={{ position: "relative", overflow: "hidden", borderRadius }}>
-      {/* red bg right */}
       <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 80, background: "#FCEBEB", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "#A32D2D", fontWeight: 600, borderRadius }}>🗑️ Delete</div>
-      {/* green bg left */}
       <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 80, background: "#E1F5EE", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "#085041", fontWeight: 600, borderRadius }}>✏️ Edit</div>
-      {/* content */}
       <div ref={ref} style={{ position: "relative", zIndex: 1, touchAction: "pan-y" }}
-        onMouseDown={e => start(e.clientX, e.clientY)}
-        onMouseMove={e => { if (state.current.active) move(e.clientX, e.clientY, e); }}
-        onMouseUp={end} onMouseLeave={end}
+        onMouseDown={e => start(e.clientX, e.clientY)} onMouseMove={e => { if (state.current.active) move(e.clientX, e.clientY, e); }} onMouseUp={end} onMouseLeave={end}
         onTouchStart={e => { if (!e.target.closest("[data-grip]")) start(e.touches[0].clientX, e.touches[0].clientY); }}
         onTouchMove={e => { if (!e.target.closest("[data-grip]")) move(e.touches[0].clientX, e.touches[0].clientY, e); }}
-        onTouchEnd={end}>
-        {children}
-      </div>
+        onTouchEnd={end}>{children}</div>
     </div>
   );
 }
  
-// ─── DRAG GRIP ────────────────────────────────────────────────────────────────
-// Touch-based reorder — press & hold grip, drag up/down
 function DragGrip({ style, onReorder, listRef, idx }) {
   const dragState = useRef(null);
   const cloneRef = useRef(null);
- 
   const onTouchStart = (e) => {
     e.stopPropagation();
-    const touch = e.touches[0];
-    const items = listRef.current;
+    const touch = e.touches[0], items = listRef.current;
     if (!items || !items[idx]) return;
-    const el = items[idx];
-    const rect = el.getBoundingClientRect();
+    const el = items[idx], rect = el.getBoundingClientRect();
     dragState.current = { startY: touch.clientY, offsetY: touch.clientY - rect.top, fromIdx: idx, toIdx: idx };
-    // floating clone
     const clone = el.cloneNode(true);
     clone.style.cssText = `position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;z-index:9999;pointer-events:none;opacity:0.9;box-shadow:0 8px 32px rgba(0,0,0,0.25);border-radius:10px;`;
-    document.body.appendChild(clone);
-    cloneRef.current = clone;
-    el.style.opacity = "0.3";
+    document.body.appendChild(clone); cloneRef.current = clone; el.style.opacity = "0.3";
   };
- 
   const onTouchMove = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const ds = dragState.current;
-    if (!ds) return;
-    const touch = e.touches[0];
-    const y = touch.clientY - ds.offsetY;
+    e.preventDefault(); e.stopPropagation();
+    const ds = dragState.current; if (!ds) return;
+    const touch = e.touches[0], y = touch.clientY - ds.offsetY;
     if (cloneRef.current) cloneRef.current.style.top = `${y}px`;
-    const items = listRef.current;
-    if (!items) return;
-    // find hovered index
+    const items = listRef.current; if (!items) return;
     let newTo = ds.fromIdx;
-    items.forEach((el, i) => {
-      if (!el) return;
-      const rect = el.getBoundingClientRect();
-      if (touch.clientY >= rect.top && touch.clientY <= rect.bottom) newTo = i;
-    });
+    items.forEach((el, i) => { if (!el) return; const rect = el.getBoundingClientRect(); if (touch.clientY >= rect.top && touch.clientY <= rect.bottom) newTo = i; });
     if (newTo !== ds.toIdx) {
-      // clear highlights
       items.forEach(el => { if (el) { el.style.borderTop = ""; el.style.borderBottom = ""; } });
-      if (items[newTo]) {
-        if (newTo < ds.fromIdx) items[newTo].style.borderTop = "2px solid #185FA5";
-        else if (newTo > ds.fromIdx) items[newTo].style.borderBottom = "2px solid #185FA5";
-      }
+      if (items[newTo]) { if (newTo < ds.fromIdx) items[newTo].style.borderTop = "2px solid #185FA5"; else if (newTo > ds.fromIdx) items[newTo].style.borderBottom = "2px solid #185FA5"; }
       ds.toIdx = newTo;
     }
   };
- 
   const onTouchEnd = (e) => {
     e.stopPropagation();
-    const ds = dragState.current;
-    if (!ds) return;
+    const ds = dragState.current; if (!ds) return;
     dragState.current = null;
     if (cloneRef.current) { cloneRef.current.remove(); cloneRef.current = null; }
     const items = listRef.current;
-    if (items) {
-      items.forEach(el => { if (el) { el.style.borderTop = ""; el.style.borderBottom = ""; el.style.opacity = "1"; } });
-    }
+    if (items) items.forEach(el => { if (el) { el.style.borderTop = ""; el.style.borderBottom = ""; el.style.opacity = "1"; } });
     if (ds.fromIdx !== ds.toIdx) onReorder(ds.fromIdx, ds.toIdx);
   };
- 
-  return (
-    <div data-grip="true" style={{ ...style, touchAction: "none", userSelect: "none" }}
-      onTouchStart={onTouchStart}
-      onTouchMove={onTouchMove}
-      onTouchEnd={onTouchEnd}>⠿</div>
-  );
+  return <div data-grip="true" style={{ ...style, touchAction: "none", userSelect: "none" }} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>⠿</div>;
 }
  
-// ─── TOAST ───────────────────────────────────────────────────────────────────
 function Toast({ toast, onUndo, onDelete }) {
   return (
     <>
@@ -246,12 +135,11 @@ function Modal({ show, title, value, onChange, onConfirm, onCancel, confirmLabel
       <div style={{ position: "fixed", top: "50%", left: "50%", transform: show ? "translate(-50%,-50%) scale(1)" : "translate(-50%,-50%) scale(0.85)", opacity: show ? 1 : 0, pointerEvents: show ? "all" : "none", transition: "transform 0.25s, opacity 0.25s", background: "#fff", borderRadius: 20, padding: "24px 20px", width: "85%", maxWidth: 340, display: "flex", flexDirection: "column", gap: 16, boxShadow: "0 12px 48px rgba(0,0,0,0.18)", zIndex: 999, fontFamily: "'DM Sans',sans-serif" }} onClick={e => e.stopPropagation()}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <span style={{ fontSize: 18, fontWeight: 700, color: "#111" }}>{title}</span>
-          <button onClick={onCancel} style={{ width: 30, height: 30, borderRadius: "50%", border: "0.5px solid #eee", background: "#f5f5f5", cursor: "pointer", fontSize: 16, color: "#888", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+          <button onClick={onCancel} style={{ width: 30, height: 30, borderRadius: "50%", border: "0.5px solid #eee", background: "#f5f5f5", cursor: "pointer", fontSize: 16, color: "#888" }}>✕</button>
         </div>
         <textarea autoFocus={show} value={value} onChange={e => onChange(e.target.value)}
           onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); onConfirm(); } if (e.key === "Escape") onCancel(); }}
-          placeholder={placeholder}
-          style={{ width: "100%", background: "#f9f9f9", border: "0.5px solid #ddd", borderRadius: 10, padding: "12px 14px", fontSize: 15, color: "#111", fontFamily: "'DM Sans',sans-serif", outline: "none", resize: "none", height: 100, lineHeight: 1.6, boxSizing: "border-box" }} />
+          placeholder={placeholder} style={{ width: "100%", background: "#f9f9f9", border: "0.5px solid #ddd", borderRadius: 10, padding: "12px 14px", fontSize: 15, color: "#111", fontFamily: "'DM Sans',sans-serif", outline: "none", resize: "none", height: 100, lineHeight: 1.6, boxSizing: "border-box" }} />
         <button onClick={onConfirm} style={{ width: "100%", padding: 14, borderRadius: 12, border: "none", background: value.trim() ? confirmColor : "#ddd", color: value.trim() ? "#fff" : "#aaa", fontSize: 15, fontWeight: 700, cursor: value.trim() ? "pointer" : "default", fontFamily: "'DM Sans',sans-serif", transition: "background .2s" }}>{confirmLabel}</button>
       </div>
     </>
@@ -261,8 +149,7 @@ function Modal({ show, title, value, onChange, onConfirm, onCancel, confirmLabel
 function BulbBtn({ count, onClick, size }) {
   return (
     <button onClick={onClick} style={{ width: size, height: size, borderRadius: "50%", border: count > 0 ? "0.5px solid #E5A832" : "0.5px solid #ddd", background: count > 0 ? "#FAEEDA" : "#f5f5f5", fontSize: size * 0.5, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginLeft: 6, position: "relative" }}>
-      💡
-      {count > 0 && <span style={{ position: "absolute", top: -3, right: -3, width: 13, height: 13, borderRadius: "50%", background: "#BA7517", color: "#fff", fontSize: 8, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, border: "1.5px solid #fff" }}>{count}</span>}
+      💡{count > 0 && <span style={{ position: "absolute", top: -3, right: -3, width: 13, height: 13, borderRadius: "50%", background: "#BA7517", color: "#fff", fontSize: 8, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, border: "1.5px solid #fff" }}>{count}</span>}
     </button>
   );
 }
@@ -277,9 +164,8 @@ function SheetOption({ icon, title, sub, color, onClick }) {
   );
 }
  
-// ─── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function App() {
-  // ALL hooks must be declared first before any returns
+  // ─── ALL HOOKS FIRST ───────────────────────────────────────────────────────
   const [session, setSession] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [loginEmail, setLoginEmail] = useState("");
@@ -287,10 +173,7 @@ export default function App() {
   const [loginError, setLoginError] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [tasks, setTasks] = useState(() => {
-    try { const local = localStorage.getItem("command_centre_tasks"); if (local) return JSON.parse(local); } catch (e) {}
-    return [];
-  });
+  const [tasks, setTasks] = useState([]);
   const [sheet, setSheet] = useState(null);
   const [urlInput, setUrlInput] = useState("");
   const [noteInput, setNoteInput] = useState("");
@@ -313,7 +196,7 @@ export default function App() {
   const subListRefs = useRef({});
   const ssubListRefs = useRef({});
  
-  // Check if already logged in
+  // Auth check
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -325,6 +208,43 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
  
+  // Load tasks from Supabase
+  useEffect(() => {
+    if (!session) return;
+    const load = async () => {
+      try {
+        const { data } = await supabase.from("tasks").select("data").eq("id", DB_ID).single();
+        if (data && data.data) { const parsed = JSON.parse(data.data); setTasks(parsed); localStorage.setItem("command_centre_tasks", data.data); }
+        else { const local = localStorage.getItem("command_centre_tasks"); if (local) setTasks(JSON.parse(local)); }
+      } catch (e) { const local = localStorage.getItem("command_centre_tasks"); if (local) setTasks(JSON.parse(local)); }
+      setLoading(false);
+    };
+    load();
+  }, [session]);
+ 
+  // Load logbook
+  useEffect(() => {
+    if (!session) return;
+    const loadLogbook = async () => {
+      try {
+        const { data } = await supabase.from("tasks").select("data").eq("id", 2).single();
+        if (data && data.data) setLogbook(JSON.parse(data.data));
+      } catch (e) { try { const l = localStorage.getItem("command_centre_logbook"); if (l) setLogbook(JSON.parse(l)); } catch (e2) {} }
+    };
+    loadLogbook();
+  }, [session]);
+ 
+  // Save tasks
+  useEffect(() => {
+    if (loading || !session) return;
+    const tasksJson = JSON.stringify(tasks);
+    localStorage.setItem("command_centre_tasks", tasksJson);
+    supabase.from("tasks").upsert({ id: DB_ID, data: tasksJson }).catch(() => {});
+  }, [tasks]);
+ 
+  // ─── HELPERS ───────────────────────────────────────────────────────────────
+  const update = fn => setTasks(prev => { const next = JSON.parse(JSON.stringify(prev)); fn(next); return next; });
+ 
   const handleLogin = async () => {
     if (!loginEmail.trim() || !loginPassword.trim()) { setLoginError("Please enter email and password"); return; }
     setLoginLoading(true); setLoginError("");
@@ -334,96 +254,20 @@ export default function App() {
   };
  
   const handleLogout = async () => {
-    if (window.confirm("Are you sure you want to log out?")) {
-      await supabase.auth.signOut();
-      setSession(null);
-    }
+    if (window.confirm("Are you sure you want to log out?")) { await supabase.auth.signOut(); setSession(null); }
   };
- 
-  // Load logbook from Supabase on startup
-  useEffect(() => {
-    const loadLogbook = async () => {
-      try {
-        const { data } = await supabase.from("tasks").select("data").eq("id", 2).single();
-        if (data && data.data) setLogbook(JSON.parse(data.data));
-      } catch (e) {
-        // try localStorage as fallback
-        try {
-          const l = localStorage.getItem("command_centre_logbook");
-          if (l) setLogbook(JSON.parse(l));
-        } catch (e2) {}
-      }
-    };
-    loadLogbook();
-  }, []);
  
   const saveToLogbook = async () => {
-    const entry = {
-      id: Date.now(),
-      date: new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }),
-      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      tasks: JSON.parse(JSON.stringify(tasks)),
-    };
+    const entry = { id: Date.now(), date: new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }), time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), tasks: JSON.parse(JSON.stringify(tasks)) };
     const updated = [entry, ...logbook].slice(0, 10);
     setLogbook(updated);
-    // save logbook to Supabase (id=2) and localStorage
     localStorage.setItem("command_centre_logbook", JSON.stringify(updated));
-    try {
-      await supabase.from("tasks").upsert({ id: 2, data: JSON.stringify(updated) });
-      // also make sure current tasks are synced to Supabase (id=1)
-      await supabase.from("tasks").upsert({ id: DB_ID, data: JSON.stringify(tasks) });
-      alert("✅ Saved to Logbook and synced!");
-    } catch (e) {
-      alert("✅ Saved locally! Will sync when online.");
-    }
-  };
-  // Load logbook from Supabase on startup  const getSubListRef = (taskId) => {
-    if (!subListRefs.current[taskId]) subListRefs.current[taskId] = [];
-    return subListRefs.current[taskId];
-  };
-  const getSSubListRef = (subId) => {
-    if (!ssubListRefs.current[subId]) ssubListRefs.current[subId] = [];
-    return ssubListRefs.current[subId];
+    try { await supabase.from("tasks").upsert({ id: 2, data: JSON.stringify(updated) }); await supabase.from("tasks").upsert({ id: DB_ID, data: JSON.stringify(tasks) }); alert("✅ Saved to Logbook!"); }
+    catch (e) { alert("✅ Saved locally!"); }
   };
  
-  const update = fn => setTasks(prev => { const next = JSON.parse(JSON.stringify(prev)); fn(next); return next; });
- 
-  // Always load from Supabase on startup — ensures browser and PWA show same data
-  useEffect(() => {
-    const sync = async () => {
-      try {
-        const { data } = await supabase.from("tasks").select("data").eq("id", DB_ID).single();
-        if (data && data.data) {
-          const parsed = JSON.parse(data.data);
-          setTasks(parsed);
-          localStorage.setItem("command_centre_tasks", data.data);
-        }
-      } catch (e) {
-        // offline — localStorage already loaded above
-        console.log("Offline — using local data");
-      }
-      setLoading(false);
-    };
-    sync();
-  }, []);
- 
-  // Save tasks — always save to localStorage immediately, try Supabase if online
-  useEffect(() => {
-    if (loading) return;
-    const tasksJson = JSON.stringify(tasks);
-    // always save locally first
-    localStorage.setItem("command_centre_tasks", tasksJson);
-    // try to sync to Supabase
-    const save = async () => {
-      try {
-        await supabase.from("tasks").upsert({ id: DB_ID, data: tasksJson });
-      } catch (e) {
-        // offline — already saved to localStorage above, will sync next time online
-        console.log("Offline — saved locally only");
-      }
-    };
-    save();
-  }, [tasks]);
+  const getSubListRef = (taskId) => { if (!subListRefs.current[taskId]) subListRefs.current[taskId] = []; return subListRefs.current[taskId]; };
+  const getSSubListRef = (subId) => { if (!ssubListRefs.current[subId]) ssubListRefs.current[subId] = []; return ssubListRefs.current[subId]; };
  
   const toggleTask = id => update(t => { const x = t.find(x => x.id === id); if (x) x.open = !x.open; });
   const toggleSub = (tid, sid) => update(t => { const s = t.find(x => x.id === tid)?.subs.find(x => x.id === sid); if (s) s.open = !s.open; });
@@ -434,20 +278,16 @@ export default function App() {
     else if (type === "ssub") { const ss = task?.subs.find(x => x.id === sid)?.ssubs.find(x => x.id === ssid); if (ss) ss.done = !ss.done; }
   });
  
-  // reorder helpers
   const reorderTasks = (from, to) => update(t => { const [m] = t.splice(from, 1); t.splice(to, 0, m); renumberAll(t); });
   const reorderSubs = (taskId, from, to) => update(t => { const task = t.find(x => x.id === taskId); if (!task) return; const [m] = task.subs.splice(from, 1); task.subs.splice(to, 0, m); renumberAll(t); });
   const reorderSSubs = (taskId, subId, from, to) => update(t => { const sub = t.find(x => x.id === taskId)?.subs.find(x => x.id === subId); if (!sub) return; const [m] = sub.ssubs.splice(from, 1); sub.ssubs.splice(to, 0, m); renumberAll(t); });
  
-  // add modal
   const openAddModal = (type, taskId = null, subId = null) => {
     if (type === "sub") update(t => { const task = t.find(x => x.id === taskId); if (task) task.open = true; });
-    if (type === "ssub") update(t => {
-      const task = t.find(x => x.id === taskId); if (task) task.open = true;
-      const sub = task?.subs.find(x => x.id === subId); if (sub) sub.open = true;
-    });
+    if (type === "ssub") update(t => { const task = t.find(x => x.id === taskId); if (task) task.open = true; const sub = task?.subs.find(x => x.id === subId); if (sub) sub.open = true; });
     setAddModal({ show: true, type, taskId, subId, value: "", url: "", images: [], showPicOpts: false });
   };
+ 
   const confirmAdd = () => {
     const name = addModal.value.trim(); if (!name) return;
     const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -460,7 +300,6 @@ export default function App() {
     setAddModal(m => ({ ...m, show: false, value: "", url: "", images: [], showPicOpts: false }));
   };
  
-  // edit modal
   const openEditModal = (id, name) => setEditModal({ show: true, id, value: name });
   const confirmEdit = () => {
     const name = editModal.value.trim(); if (!name) return;
@@ -468,7 +307,6 @@ export default function App() {
     setEditModal({ show: false, id: null, value: "" });
   };
  
-  // delete
   const handleSwipeLeft = (id, name, resetFn) => {
     clearTimeout(toastTimer.current);
     setToast(prev => { if (prev.resetFn) prev.resetFn(); return { show: true, name, id, resetFn }; });
@@ -485,25 +323,19 @@ export default function App() {
       for (const task of t) {
         const si = task.subs.findIndex(s => s.id === id);
         if (si !== -1) { task.subs.splice(si, 1); renumberAll(t); return; }
-        for (const sub of task.subs) {
-          const ssi = sub.ssubs.findIndex(ss => ss.id === id);
-          if (ssi !== -1) { sub.ssubs.splice(ssi, 1); renumberAll(t); return; }
-        }
+        for (const sub of task.subs) { const ssi = sub.ssubs.findIndex(ss => ss.id === id); if (ssi !== -1) { sub.ssubs.splice(ssi, 1); renumberAll(t); return; } }
       }
     });
   };
  
-  // attachments
   const compressImage = (file, callback) => {
     const reader = new FileReader();
     reader.onload = ev => {
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement("canvas");
-        const MAX = 1200;
-        let w = img.width, h = img.height;
-        if (w > h) { if (w > MAX) { h = h * MAX / w; w = MAX; } }
-        else { if (h > MAX) { w = w * MAX / h; h = MAX; } }
+        const MAX = 1200; let w = img.width, h = img.height;
+        if (w > h) { if (w > MAX) { h = h * MAX / w; w = MAX; } } else { if (h > MAX) { w = w * MAX / h; h = MAX; } }
         canvas.width = w; canvas.height = h;
         canvas.getContext("2d").drawImage(img, 0, 0, w, h);
         callback(canvas.toDataURL("image/jpeg", 0.9));
@@ -515,6 +347,7 @@ export default function App() {
  
   const handleImageFiles = files => { Array.from(files).forEach(f => { compressImage(f, src => setImages(prev => [...prev, { src }])); }); };
   const handleModalImageFiles = files => { Array.from(files).forEach(f => { compressImage(f, src => setAddModal(m => ({ ...m, images: [...m.images, { src }] }))); }); };
+ 
   const saveAttachments = itemId => {
     update(t => {
       const item = getItem(t, itemId); if (!item) return;
@@ -527,16 +360,10 @@ export default function App() {
     setSheet(null);
     setTimeout(() => setSheet({ itemId, view: "view" }), 50);
   };
+ 
   const deleteAtt = (itemId, type, idx) => update(t => { const item = getItem(t, itemId); if (item) item.attachments[type].splice(idx, 1); });
  
-  const totalTasks = tasks.length;
-  const doneTasks = tasks.filter(t => t.done).length;
-  const pct = totalTasks ? Math.round(doneTasks / totalTasks * 100) : 0;
-  const sheetItem = sheet ? getItem(tasks, sheet.itemId) : null;
-  const attCount = sheetItem ? countAtt(sheetItem) : 0;
-  const S = styles;
- 
-  // Early returns AFTER all hooks
+  // ─── EARLY RETURNS (after all hooks) ───────────────────────────────────────
   if (authLoading) return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: "#f5f5f5", flexDirection: "column", gap: 16, fontFamily: "'DM Sans',sans-serif" }}>
       <div style={{ fontSize: 40 }}>⚡</div>
@@ -586,45 +413,43 @@ export default function App() {
     </div>
   );
  
+  // ─── MAIN RENDER ───────────────────────────────────────────────────────────
+  const totalTasks = tasks.length;
+  const doneTasks = tasks.filter(t => t.done).length;
+  const pct = totalTasks ? Math.round(doneTasks / totalTasks * 100) : 0;
+  const sheetItem = sheet ? getItem(tasks, sheet.itemId) : null;
+  const attCount = sheetItem ? countAtt(sheetItem) : 0;
+  const S = styles;
+ 
   return (
     <div style={S.page}>
-      {/* TOPBAR */}
       <div style={S.topbar}>
-        <div><div style={S.topTitle}>Today's Tasks</div><div style={S.topSub}>Sunday, 1 Jun 2026</div></div>
+        <div><div style={S.topTitle}>Today's Tasks</div><div style={S.topSub}>Command Centre</div></div>
         <div style={{ display: "flex", gap: 8 }}>
           <button style={S.iconBtn}>🔍</button>
           <button style={S.iconBtn} onClick={() => setShowSettings(true)}>⚙️</button>
         </div>
       </div>
  
-      {/* STATS */}
       <div style={S.statsRow}>
         <div style={S.statCard}><div style={{ ...S.statNum, color: "#185FA5" }}>{totalTasks}</div><div style={S.statLabel}>Total</div></div>
         <div style={S.statCard}><div style={{ ...S.statNum, color: "#1D9E75" }}>{doneTasks}</div><div style={S.statLabel}>Done</div></div>
         <div style={S.statCard}><div style={{ ...S.statNum, color: "#BA7517" }}>{pct}%</div><div style={S.statLabel}>Progress</div></div>
       </div>
  
-      {/* SECTION HEADER */}
       <div style={S.sectionHeader}>
         <span style={S.sectionLabel}>TASKS</span>
         <button style={S.addHeaderBtn} onClick={() => openAddModal("task")}>+ Add task</button>
       </div>
  
-      {/* TASK LIST */}
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {tasks.map((task, ti) => {
           const hasSubs = task.subs.length > 0;
           const doneSubs = task.subs.filter(s => s.done).length;
           const subListRef = { current: getSubListRef(task.id) };
- 
           return (
-            <div key={task.id}
-              ref={el => taskListRef.current[ti] = el}
-              style={{ borderRadius: 12, overflow: "hidden", border: "0.5px solid #eee" }}>
- 
-              <SwipeRow borderRadius={0}
-                onSwipeLeft={resetFn => handleSwipeLeft(task.id, task.name, resetFn)}
-                onSwipeRight={() => openEditModal(task.id, task.name)}>
+            <div key={task.id} ref={el => taskListRef.current[ti] = el} style={{ borderRadius: 12, overflow: "hidden", border: "0.5px solid #eee" }}>
+              <SwipeRow borderRadius={0} onSwipeLeft={resetFn => handleSwipeLeft(task.id, task.name, resetFn)} onSwipeRight={() => openEditModal(task.id, task.name)}>
                 <div style={{ background: "#fff" }}>
                   <div style={S.taskRow}>
                     <DragGrip style={S.grip} listRef={taskListRef} idx={ti} onReorder={reorderTasks} />
@@ -643,37 +468,27 @@ export default function App() {
                   </div>
                 </div>
               </SwipeRow>
- 
               {task.open && (
                 <div style={{ ...S.subList, background: "#fff" }}>
                   {task.subs.map((sub, si) => {
-                    const hasSSubs = sub.ssubs.length > 0;
                     const ssubListRef = { current: getSSubListRef(sub.id) };
- 
                     return (
                       <div key={sub.id} ref={el => { const arr = getSubListRef(task.id); arr[si] = el; }}>
-                        <SwipeRow borderRadius={8}
-                          onSwipeLeft={resetFn => handleSwipeLeft(sub.id, sub.name, resetFn)}
-                          onSwipeRight={() => openEditModal(sub.id, sub.name)}>
+                        <SwipeRow borderRadius={8} onSwipeLeft={resetFn => handleSwipeLeft(sub.id, sub.name, resetFn)} onSwipeRight={() => openEditModal(sub.id, sub.name)}>
                           <div style={S.subRow}>
                             <DragGrip style={S.subGrip} listRef={subListRef} idx={si} onReorder={(f, t) => reorderSubs(task.id, f, t)} />
                             <div style={S.subNumCol}><span style={S.subNumText}>{sub.num}</span></div>
                             <button style={S.subExpandBtn} onClick={() => toggleSub(task.id, sub.id)}>{sub.open ? "−" : "+"}</button>
                             <div style={{ ...S.subCheck, ...(sub.done ? S.checkDone : {}) }} onClick={() => toggleDone("sub", task.id, sub.id)} />
-                            <div style={S.subInfo} onClick={() => toggleSub(task.id, sub.id)}>
-                              <span style={{ ...S.subName, ...(sub.done ? S.taskNameDone : {}) }}>{sub.name}</span>
-                            </div>
+                            <div style={S.subInfo} onClick={() => toggleSub(task.id, sub.id)}><span style={{ ...S.subName, ...(sub.done ? S.taskNameDone : {}) }}>{sub.name}</span></div>
                             <BulbBtn count={countAtt(sub)} onClick={() => setSheet({ itemId: sub.id, view: "menu" })} size={24} />
                           </div>
                         </SwipeRow>
- 
                         {sub.open && (
                           <div style={S.ssubList}>
                             {sub.ssubs.map((ss, ssi) => (
                               <div key={ss.id} ref={el => { const arr = getSSubListRef(sub.id); arr[ssi] = el; }}>
-                                <SwipeRow borderRadius={8}
-                                  onSwipeLeft={resetFn => handleSwipeLeft(ss.id, ss.name, resetFn)}
-                                  onSwipeRight={() => openEditModal(ss.id, ss.name)}>
+                                <SwipeRow borderRadius={8} onSwipeLeft={resetFn => handleSwipeLeft(ss.id, ss.name, resetFn)} onSwipeRight={() => openEditModal(ss.id, ss.name)}>
                                   <div style={S.ssubRow}>
                                     <DragGrip style={S.ssubGrip} listRef={ssubListRef} idx={ssi} onReorder={(f, t) => reorderSSubs(task.id, sub.id, f, t)} />
                                     <div style={S.ssubNumCol}><span style={S.ssubNumText}>{ss.num}</span></div>
@@ -735,10 +550,10 @@ export default function App() {
                     <input ref={cameraRef} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={e => handleImageFiles(e.target.files)} />
                     <input ref={galleryRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={e => handleImageFiles(e.target.files)} />
                     {images.length > 0 && (
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 6, marginTop: 8 }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 6, marginTop: 8 }}>
                         {images.map((img, i) => (
                           <div key={i} style={{ position: "relative" }}>
-                            <img src={img.src} onClick={() => setFullImg(img.src)} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8, border: "0.5px solid #eee", cursor: "pointer" }} />
+                            <img src={img.src} onClick={() => setFullImg(img.src)} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8, cursor: "pointer" }} />
                             <button onClick={() => setImages(prev => prev.filter((_, idx) => idx !== i))} style={{ position: "absolute", top: 3, right: 3, width: 18, height: 18, borderRadius: "50%", background: "#FCEBEB", border: "none", cursor: "pointer", fontSize: 10, color: "#A32D2D" }}>✕</button>
                           </div>
                         ))}
@@ -753,46 +568,43 @@ export default function App() {
               {sheet.view === "view" && (
                 <div style={{ paddingTop: 8 }}>
                   <button style={S.backBtn} onClick={() => setSheet({ ...sheet, view: "menu" })}>← Back</button>
-                  {attCount === 0
-                    ? <div style={{ textAlign: "center", padding: "28px 0", color: "#999", fontSize: 13 }}>Nothing added yet.</div>
-                    : <>
-                      {sheetItem.attachments.images?.length > 0 && (
-                        <div style={{ marginTop: 12 }}>
-                          <div style={S.viewSecTitle}>📷 Pictures</div>
-                          <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 6 }}>
-                            {sheetItem.attachments.images.map((img, i) => (
-                              <div key={i} style={{ position: "relative" }}>
-                                <img src={img.src} onClick={() => setFullImg(img.src)} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8, cursor: "pointer" }} />
-                                <button style={S.delBtn} onClick={() => deleteAtt(sheet.itemId, "images", i)}>✕</button>
-                              </div>
-                            ))}
+                  {attCount === 0 ? <div style={{ textAlign: "center", padding: "28px 0", color: "#999", fontSize: 13 }}>Nothing added yet.</div> : <>
+                    {sheetItem.attachments.images?.length > 0 && (
+                      <div style={{ marginTop: 12 }}>
+                        <div style={S.viewSecTitle}>📷 Pictures</div>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 6 }}>
+                          {sheetItem.attachments.images.map((img, i) => (
+                            <div key={i} style={{ position: "relative" }}>
+                              <img src={img.src} onClick={() => setFullImg(img.src)} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8, cursor: "pointer" }} />
+                              <button style={S.delBtn} onClick={() => deleteAtt(sheet.itemId, "images", i)}>✕</button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {sheetItem.attachments.links.length > 0 && (
+                      <div style={{ marginTop: 12 }}>
+                        <div style={S.viewSecTitle}>🔗 Links</div>
+                        {sheetItem.attachments.links.map((l, i) => (
+                          <div key={i} style={{ position: "relative", marginBottom: 6 }}>
+                            <a href={l.url} target="_blank" rel="noreferrer" style={S.linkCard}>{l.url}</a>
+                            <button style={S.delBtn} onClick={() => deleteAtt(sheet.itemId, "links", i)}>✕</button>
                           </div>
-                        </div>
-                      )}
-                      {sheetItem.attachments.links.length > 0 && (
-                        <div style={{ marginTop: 12 }}>
-                          <div style={S.viewSecTitle}>🔗 Links</div>
-                          {sheetItem.attachments.links.map((l, i) => (
-                            <div key={i} style={{ position: "relative", marginBottom: 6 }}>
-                              <a href={l.url} target="_blank" rel="noreferrer" style={S.linkCard}>{l.url}</a>
-                              <button style={S.delBtn} onClick={() => deleteAtt(sheet.itemId, "links", i)}>✕</button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      {sheetItem.attachments.notes.length > 0 && (
-                        <div style={{ marginTop: 12 }}>
-                          <div style={S.viewSecTitle}>📝 Notes</div>
-                          {sheetItem.attachments.notes.map((n, i) => (
-                            <div key={i} style={{ ...S.noteCard, position: "relative", marginBottom: 6 }}>
-                              {n.text}
-                              <div style={{ fontSize: 10, color: "#999", marginTop: 4 }}>{n.time}</div>
-                              <button style={S.delBtn} onClick={() => deleteAtt(sheet.itemId, "notes", i)}>✕</button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </>}
+                        ))}
+                      </div>
+                    )}
+                    {sheetItem.attachments.notes.length > 0 && (
+                      <div style={{ marginTop: 12 }}>
+                        <div style={S.viewSecTitle}>📝 Notes</div>
+                        {sheetItem.attachments.notes.map((n, i) => (
+                          <div key={i} style={{ ...S.noteCard, position: "relative", marginBottom: 6 }}>
+                            {n.text}<div style={{ fontSize: 10, color: "#999", marginTop: 4 }}>{n.time}</div>
+                            <button style={S.delBtn} onClick={() => deleteAtt(sheet.itemId, "notes", i)}>✕</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>}
                 </div>
               )}
             </div>
@@ -800,7 +612,7 @@ export default function App() {
         </div>
       )}
  
-      {/* SETTINGS SHEET */}
+      {/* SETTINGS */}
       {showSettings && !logView && (
         <div style={S.overlay} onClick={() => setShowSettings(false)}>
           <div style={S.sheetBox} onClick={e => e.stopPropagation()}>
@@ -810,37 +622,25 @@ export default function App() {
               <button style={S.sheetClose} onClick={() => setShowSettings(false)}>✕</button>
             </div>
             <div style={{ padding: "0 16px 32px", display: "flex", flexDirection: "column", gap: 12 }}>
-              {/* SAVE BUTTON */}
               <div onClick={saveToLogbook} style={{ display: "flex", alignItems: "center", gap: 12, padding: 16, borderRadius: 14, background: "#E6F1FB", border: "0.5px solid #93C5FD", cursor: "pointer" }}>
                 <div style={{ width: 40, height: 40, borderRadius: "50%", background: "#185FA5", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>💾</div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: "#185FA5" }}>Save Current Work</div>
-                  <div style={{ fontSize: 11, color: "#5B8BC9", marginTop: 2 }}>Saves all tasks, subtasks, pictures, URLs and notes to Logbook</div>
-                </div>
+                <div style={{ flex: 1 }}><div style={{ fontSize: 14, fontWeight: 700, color: "#185FA5" }}>Save Current Work</div><div style={{ fontSize: 11, color: "#5B8BC9", marginTop: 2 }}>Save all tasks to Logbook</div></div>
               </div>
- 
-              {/* LOGBOOK BUTTON */}
               <div onClick={() => setLogView("list")} style={{ display: "flex", alignItems: "center", gap: 12, padding: 16, borderRadius: 14, background: "#FAEEDA", border: "0.5px solid #E5A832", cursor: "pointer" }}>
                 <div style={{ width: 40, height: 40, borderRadius: "50%", background: "#BA7517", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>📖</div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: "#BA7517" }}>Logbook</div>
-                  <div style={{ fontSize: 11, color: "#B07A2A", marginTop: 2 }}>{logbook.length > 0 ? `${logbook.length} save(s) stored` : "No saves yet"}</div>
-                </div>
+                <div style={{ flex: 1 }}><div style={{ fontSize: 14, fontWeight: 700, color: "#BA7517" }}>Logbook</div><div style={{ fontSize: 11, color: "#B07A2A", marginTop: 2 }}>{logbook.length > 0 ? `${logbook.length} save(s) stored` : "No saves yet"}</div></div>
                 <span style={{ color: "#ccc" }}>›</span>
               </div>
-              {/* LOGOUT BUTTON */}
               <div onClick={handleLogout} style={{ display: "flex", alignItems: "center", gap: 12, padding: 16, borderRadius: 14, background: "#FCEBEB", border: "0.5px solid #FECACA", cursor: "pointer" }}>
                 <div style={{ width: 40, height: 40, borderRadius: "50%", background: "#A32D2D", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>🚪</div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: "#A32D2D" }}>Log Out</div>
-                  <div style={{ fontSize: 11, color: "#C87272", marginTop: 2 }}>Sign out of your account</div>
-                </div>
+                <div style={{ flex: 1 }}><div style={{ fontSize: 14, fontWeight: 700, color: "#A32D2D" }}>Log Out</div><div style={{ fontSize: 11, color: "#C87272", marginTop: 2 }}>Sign out of your account</div></div>
               </div>
             </div>
           </div>
         </div>
       )}
  
+      {/* LOGBOOK LIST */}
       {showSettings && logView === "list" && (
         <div style={S.overlay} onClick={() => { setShowSettings(false); setLogView(null); }}>
           <div style={S.sheetBox} onClick={e => e.stopPropagation()}>
@@ -857,7 +657,7 @@ export default function App() {
                   <div key={entry.id} onClick={() => setLogView(entry)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 12px", borderRadius: 12, background: i === 0 ? "#E6F1FB" : "#f9f9f9", border: `0.5px solid ${i === 0 ? "#93C5FD" : "#eee"}`, marginBottom: 8, cursor: "pointer" }}>
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 700, color: "#111" }}>📅 {entry.date} · {entry.time}</div>
-                      <div style={{ fontSize: 11, color: "#888", marginTop: 3 }}>{entry.tasks.length} task(s) saved {i === 0 ? "· Latest" : ""}</div>
+                      <div style={{ fontSize: 11, color: "#888", marginTop: 3 }}>{entry.tasks.length} task(s) {i === 0 ? "· Latest" : ""}</div>
                     </div>
                     <span style={{ color: "#ccc" }}>›</span>
                   </div>
@@ -868,7 +668,7 @@ export default function App() {
         </div>
       )}
  
-      {/* LOGBOOK ENTRY VIEW */}
+      {/* LOGBOOK ENTRY */}
       {showSettings && logView && logView !== "list" && (
         <div style={S.overlay} onClick={() => { setShowSettings(false); setLogView(null); }}>
           <div style={S.sheetBox} onClick={e => e.stopPropagation()}>
@@ -879,33 +679,27 @@ export default function App() {
             </div>
             <div style={{ padding: "0 16px 32px", overflowY: "auto" }}>
               <button style={S.backBtn} onClick={() => setLogView("list")}>← Back</button>
- 
-              {/* RESTORE BUTTON */}
               <div onClick={() => {
                 if (window.confirm(`Restore save from ${logView.date} at ${logView.time}? Your current tasks will be replaced.`)) {
                   const restored = JSON.parse(JSON.stringify(logView.tasks));
                   setTasks(restored);
                   localStorage.setItem("command_centre_tasks", JSON.stringify(restored));
                   supabase.from("tasks").upsert({ id: DB_ID, data: JSON.stringify(restored) }).catch(() => {});
-                  setShowSettings(false);
-                  setLogView(null);
+                  setShowSettings(false); setLogView(null);
                   alert("✅ Restored successfully!");
                 }
               }} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px 16px", borderRadius: 12, background: "#E1F5EE", border: "0.5px solid #1D9E75", cursor: "pointer", marginBottom: 14 }}>
                 <span style={{ fontSize: 16 }}>♻️</span>
                 <span style={{ fontSize: 13, fontWeight: 700, color: "#085041" }}>Restore This Version</span>
               </div>
- 
-              <div style={{ fontSize: 11, color: "#aaa", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>
-                {logView.tasks.length} task(s) in this save
-              </div>
+              <div style={{ fontSize: 11, color: "#aaa", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>{logView.tasks.length} task(s)</div>
               {logView.tasks.map((task, i) => (
                 <div key={i} style={{ marginBottom: 10, background: "#f9f9f9", borderRadius: 10, padding: "10px 12px", border: "0.5px solid #eee" }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: "#111" }}>{task.num}. {task.name}</div>
-                  {task.subs.length > 0 && task.subs.map((sub, j) => (
+                  {task.subs.map((sub, j) => (
                     <div key={j} style={{ marginTop: 6, paddingLeft: 12, borderLeft: "2px solid #ddd" }}>
                       <div style={{ fontSize: 12, color: "#555" }}>{sub.num} {sub.name}</div>
-                      {sub.ssubs.length > 0 && sub.ssubs.map((ss, k) => (
+                      {sub.ssubs.map((ss, k) => (
                         <div key={k} style={{ paddingLeft: 12, borderLeft: "2px solid #eee", marginTop: 3 }}>
                           <div style={{ fontSize: 11, color: "#888" }}>{ss.num} {ss.name}</div>
                         </div>
@@ -920,25 +714,22 @@ export default function App() {
         </div>
       )}
  
-      {/* DELETE TOAST */}
       <Toast toast={toast} onUndo={handleUndo} onDelete={handleDelete} />
  
-      {/* FULLSCREEN IMAGE */}
       {fullImg && (
         <div onClick={() => setFullImg(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.95)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column" }}>
-          <button onClick={() => setFullImg(null)} style={{ position: "absolute", top: 20, right: 20, width: 40, height: 40, borderRadius: "50%", background: "rgba(255,255,255,0.15)", border: "none", cursor: "pointer", fontSize: 20, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+          <button onClick={() => setFullImg(null)} style={{ position: "absolute", top: 20, right: 20, width: 40, height: 40, borderRadius: "50%", background: "rgba(255,255,255,0.15)", border: "none", cursor: "pointer", fontSize: 20, color: "#fff" }}>✕</button>
           <img src={fullImg} style={{ maxWidth: "95vw", maxHeight: "85vh", objectFit: "contain", borderRadius: 12 }} />
           <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 12, marginTop: 16 }}>Tap anywhere to close</div>
         </div>
       )}
  
-      {/* ADD MODAL */}
       {addModal.show && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 998 }} onClick={() => setAddModal(m => ({ ...m, show: false }))}>
           <div style={{ background: "#fff", borderRadius: 20, padding: "24px 20px", width: "88%", maxWidth: 360, display: "flex", flexDirection: "column", gap: 14, boxShadow: "0 12px 48px rgba(0,0,0,0.18)", maxHeight: "90vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <span style={{ fontSize: 18, fontWeight: 700, color: "#111" }}>{addModal.type === "task" ? "➕ Add Task" : addModal.type === "sub" ? "➕ Add Subtask" : "➕ Add Sub-subtask"}</span>
-              <button onClick={() => setAddModal(m => ({ ...m, show: false }))} style={{ width: 30, height: 30, borderRadius: "50%", border: "0.5px solid #eee", background: "#f5f5f5", cursor: "pointer", fontSize: 16, color: "#888", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+              <button onClick={() => setAddModal(m => ({ ...m, show: false }))} style={{ width: 30, height: 30, borderRadius: "50%", border: "0.5px solid #eee", background: "#f5f5f5", cursor: "pointer", fontSize: 16, color: "#888" }}>✕</button>
             </div>
             <textarea autoFocus value={addModal.value} onChange={e => setAddModal(m => ({ ...m, value: e.target.value }))}
               onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); confirmAdd(); } if (e.key === "Escape") setAddModal(m => ({ ...m, show: false })); }}
@@ -976,14 +767,11 @@ export default function App() {
               <input value={addModal.url} onChange={e => setAddModal(m => ({ ...m, url: e.target.value }))} placeholder="https://..."
                 style={{ width: "100%", background: "#f9f9f9", border: "0.5px solid #eee", borderRadius: 10, padding: "10px 12px", fontSize: 13, color: "#111", fontFamily: "'DM Sans',sans-serif", outline: "none", boxSizing: "border-box" }} />
             </div>
-            <button onClick={confirmAdd} style={{ width: "100%", padding: 14, borderRadius: 12, border: "none", background: addModal.value.trim() ? "#185FA5" : "#ddd", color: addModal.value.trim() ? "#fff" : "#aaa", fontSize: 15, fontWeight: 700, cursor: addModal.value.trim() ? "pointer" : "default", fontFamily: "'DM Sans',sans-serif", transition: "background .2s" }}>
-              ✓ Done
-            </button>
+            <button onClick={confirmAdd} style={{ width: "100%", padding: 14, borderRadius: 12, border: "none", background: addModal.value.trim() ? "#185FA5" : "#ddd", color: addModal.value.trim() ? "#fff" : "#aaa", fontSize: 15, fontWeight: 700, cursor: addModal.value.trim() ? "pointer" : "default", fontFamily: "'DM Sans',sans-serif", transition: "background .2s" }}>✓ Done</button>
           </div>
         </div>
       )}
  
-      {/* EDIT MODAL */}
       <Modal show={editModal.show} title="✏️ Edit" value={editModal.value} onChange={v => setEditModal(m => ({ ...m, value: v }))} onConfirm={confirmEdit} onCancel={() => setEditModal({ show: false, id: null, value: "" })} confirmLabel="✓ Save Changes" confirmColor="#1D9E75" placeholder="Edit name..." />
     </div>
   );
