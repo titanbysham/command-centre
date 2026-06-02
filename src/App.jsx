@@ -191,7 +191,7 @@ export default function App() {
   const subListRefs = useRef({});
   const ssubListRefs = useRef({});
  
-  // Load from Supabase on startup
+  // Load from Supabase on startup, fallback to localStorage
   useEffect(() => {
     const load = async () => {
       try {
@@ -199,8 +199,14 @@ export default function App() {
         if (data && data.data) {
           const parsed = JSON.parse(data.data);
           if (parsed.length > 0) { setTasks(parsed); localStorage.setItem("command_centre_tasks", data.data); }
+        } else {
+          const local = localStorage.getItem("command_centre_tasks");
+          if (local) { const parsed = JSON.parse(local); if (parsed.length > 0) setTasks(parsed); }
         }
-      } catch (e) {}
+      } catch (e) {
+        const local = localStorage.getItem("command_centre_tasks");
+        if (local) { try { const parsed = JSON.parse(local); if (parsed.length > 0) setTasks(parsed); } catch (e2) {} }
+      }
       setLoading(false);
     };
     load();
@@ -212,6 +218,7 @@ export default function App() {
       try {
         const { data } = await supabase.from("tasks").select("data").eq("id", 2).single();
         if (data && data.data) setLogbook(JSON.parse(data.data));
+        else { const l = localStorage.getItem("command_centre_logbook"); if (l) setLogbook(JSON.parse(l)); }
       } catch (e) {
         try { const l = localStorage.getItem("command_centre_logbook"); if (l) setLogbook(JSON.parse(l)); } catch (e2) {}
       }
@@ -219,13 +226,15 @@ export default function App() {
     loadLogbook();
   }, []);
  
-  // Save tasks
+  // Save tasks to localStorage + Supabase
   useEffect(() => {
     if (loading) return;
     const tasksJson = JSON.stringify(tasks);
     localStorage.setItem("command_centre_tasks", tasksJson);
     const save = async () => {
-      if (tasks.length > 0) { try { await supabase.from("tasks").upsert({ id: DB_ID, data: tasksJson }); } catch (e) {} }
+      if (tasks.length > 0) {
+        try { await supabase.from("tasks").upsert({ id: DB_ID, data: tasksJson }); } catch (e) {}
+      }
     };
     save();
   }, [tasks]);
