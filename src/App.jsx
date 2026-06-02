@@ -89,8 +89,8 @@ function DragGrip({ style, onReorder, listRef, idx }) {
   const onTouchMove = (e) => {
     e.preventDefault(); e.stopPropagation();
     const ds = dragState.current; if (!ds) return;
-    const touch = e.touches[0], y = touch.clientY - ds.offsetY;
-    if (cloneRef.current) cloneRef.current.style.top = `${y}px`;
+    const touch = e.touches[0];
+    if (cloneRef.current) cloneRef.current.style.top = `${touch.clientY - ds.offsetY}px`;
     const items = listRef.current; if (!items) return;
     let newTo = ds.fromIdx;
     items.forEach((el, i) => { if (!el) return; const rect = el.getBoundingClientRect(); if (touch.clientY >= rect.top && touch.clientY <= rect.bottom) newTo = i; });
@@ -165,15 +165,11 @@ function SheetOption({ icon, title, sub, color, onClick }) {
 }
  
 export default function App() {
-  // ─── ALL HOOKS FIRST ───────────────────────────────────────────────────────
-  const [session, setSession] = useState(null);
-  const [authLoading, setAuthLoading] = useState(true);
-  const [loginEmail, setLoginEmail] = useState("");
-  const [loginPassword, setLoginPassword] = useState("");
-  const [loginError, setLoginError] = useState("");
-  const [loginLoading, setLoginLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [tasks, setTasks] = useState([]);
+  const [tasks, setTasks] = useState(() => {
+    try { const l = localStorage.getItem("command_centre_tasks"); if (l) return JSON.parse(l); } catch (e) {}
+    return [];
+  });
+  const [loading, setLoading] = useState(true);
   const [sheet, setSheet] = useState(null);
   const [urlInput, setUrlInput] = useState("");
   const [noteInput, setNoteInput] = useState("");
@@ -186,7 +182,6 @@ export default function App() {
   const [fullImg, setFullImg] = useState(null);
   const [logbook, setLogbook] = useState([]);
   const [logView, setLogView] = useState(null);
-  const [loading, setLoading] = useState(true);
   const toastTimer = useRef(null);
   const cameraRef = useRef(null);
   const galleryRef = useRef(null);
@@ -196,80 +191,57 @@ export default function App() {
   const subListRefs = useRef({});
   const ssubListRefs = useRef({});
  
-  // Temporarily skip login - load tasks directly
+  // Load from Supabase on startup
   useEffect(() => {
-    setAuthLoading(false);
-    setSession({ user: { email: "temp" } });
-  }, []);
- 
-  // Load tasks from Supabase
-  useEffect(() => {
-    if (!session) return;
     const load = async () => {
-      // First load from localStorage instantly
-      try {
-        const local = localStorage.getItem("command_centre_tasks");
-        if (local) { const parsed = JSON.parse(local); if (parsed.length > 0) setTasks(parsed); }
-      } catch (e) {}
-      // Then try Supabase
       try {
         const { data } = await supabase.from("tasks").select("data").eq("id", DB_ID).single();
         if (data && data.data) {
           const parsed = JSON.parse(data.data);
           if (parsed.length > 0) { setTasks(parsed); localStorage.setItem("command_centre_tasks", data.data); }
         }
-      } catch (e) { console.log("Offline or no data in Supabase"); }
+      } catch (e) {}
       setLoading(false);
     };
     load();
-  }, [session]);
+  }, []);
  
   // Load logbook
   useEffect(() => {
-    if (!session) return;
     const loadLogbook = async () => {
       try {
         const { data } = await supabase.from("tasks").select("data").eq("id", 2).single();
         if (data && data.data) setLogbook(JSON.parse(data.data));
-      } catch (e) { try { const l = localStorage.getItem("command_centre_logbook"); if (l) setLogbook(JSON.parse(l)); } catch (e2) {} }
+      } catch (e) {
+        try { const l = localStorage.getItem("command_centre_logbook"); if (l) setLogbook(JSON.parse(l)); } catch (e2) {}
+      }
     };
     loadLogbook();
-  }, [session]);
+  }, []);
  
-  // Save tasks - only when tasks actually have data
+  // Save tasks
   useEffect(() => {
-    if (loading || !session || tasks.length === 0) return;
+    if (loading) return;
     const tasksJson = JSON.stringify(tasks);
     localStorage.setItem("command_centre_tasks", tasksJson);
-    supabase.from("tasks").upsert({ id: DB_ID, data: tasksJson }).catch(() => {});
+    if (tasks.length > 0) supabase.from("tasks").upsert({ id: DB_ID, data: tasksJson }).catch(() => {});
   }, [tasks]);
  
-  // ─── HELPERS ───────────────────────────────────────────────────────────────
   const update = fn => setTasks(prev => { const next = JSON.parse(JSON.stringify(prev)); fn(next); return next; });
- 
-  const handleLogin = async () => {
-    if (!loginEmail.trim() || !loginPassword.trim()) { setLoginError("Please enter email and password"); return; }
-    setLoginLoading(true); setLoginError("");
-    const { error } = await supabase.auth.signInWithPassword({ email: loginEmail, password: loginPassword });
-    if (error) setLoginError("Wrong email or password. Try again!");
-    setLoginLoading(false);
-  };
- 
-  const handleLogout = async () => {
-    if (window.confirm("Are you sure you want to log out?")) { await supabase.auth.signOut(); setSession(null); }
-  };
+  const getSubListRef = (taskId) => { if (!subListRefs.current[taskId]) subListRefs.current[taskId] = []; return subListRefs.current[taskId]; };
+  const getSSubListRef = (subId) => { if (!ssubListRefs.current[subId]) ssubListRefs.current[subId] = []; return ssubListRefs.current[subId]; };
  
   const saveToLogbook = async () => {
     const entry = { id: Date.now(), date: new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }), time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), tasks: JSON.parse(JSON.stringify(tasks)) };
     const updated = [entry, ...logbook].slice(0, 10);
     setLogbook(updated);
     localStorage.setItem("command_centre_logbook", JSON.stringify(updated));
-    try { await supabase.from("tasks").upsert({ id: 2, data: JSON.stringify(updated) }); await supabase.from("tasks").upsert({ id: DB_ID, data: JSON.stringify(tasks) }); alert("✅ Saved to Logbook!"); }
-    catch (e) { alert("✅ Saved locally!"); }
+    try {
+      await supabase.from("tasks").upsert({ id: 2, data: JSON.stringify(updated) });
+      await supabase.from("tasks").upsert({ id: DB_ID, data: JSON.stringify(tasks) });
+      alert("✅ Saved to Logbook!");
+    } catch (e) { alert("✅ Saved locally!"); }
   };
- 
-  const getSubListRef = (taskId) => { if (!subListRefs.current[taskId]) subListRefs.current[taskId] = []; return subListRefs.current[taskId]; };
-  const getSSubListRef = (subId) => { if (!ssubListRefs.current[subId]) ssubListRefs.current[subId] = []; return ssubListRefs.current[subId]; };
  
   const toggleTask = id => update(t => { const x = t.find(x => x.id === id); if (x) x.open = !x.open; });
   const toggleSub = (tid, sid) => update(t => { const s = t.find(x => x.id === tid)?.subs.find(x => x.id === sid); if (s) s.open = !s.open; });
@@ -365,63 +337,19 @@ export default function App() {
  
   const deleteAtt = (itemId, type, idx) => update(t => { const item = getItem(t, itemId); if (item) item.attachments[type].splice(idx, 1); });
  
-  // ─── EARLY RETURNS (after all hooks) ───────────────────────────────────────
-  if (authLoading) return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: "#f5f5f5", flexDirection: "column", gap: 16, fontFamily: "'DM Sans',sans-serif" }}>
-      <div style={{ fontSize: 40 }}>⚡</div>
-      <div style={{ fontSize: 16, fontWeight: 600, color: "#111" }}>Loading...</div>
-    </div>
-  );
- 
-  if (!session) return (
-    <div style={{ minHeight: "100vh", background: "#f5f5f5", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "'DM Sans',sans-serif" }}>
-      <div style={{ background: "#fff", borderRadius: 24, padding: "36px 24px", width: "100%", maxWidth: 360, boxShadow: "0 12px 48px rgba(0,0,0,0.1)" }}>
-        <div style={{ textAlign: "center", marginBottom: 28 }}>
-          <div style={{ fontSize: 48, marginBottom: 12 }}>⚡</div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: "#111" }}>Command Centre</div>
-          <div style={{ fontSize: 13, color: "#888", marginTop: 6 }}>Sign in to access your tasks</div>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <div>
-            <div style={{ fontSize: 11, fontWeight: 600, color: "#aaa", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Email</div>
-            <input value={loginEmail} onChange={e => setLoginEmail(e.target.value)} placeholder="your@email.com" type="email"
-              style={{ width: "100%", background: "#f9f9f9", border: "0.5px solid #ddd", borderRadius: 10, padding: "12px 14px", fontSize: 15, color: "#111", fontFamily: "'DM Sans',sans-serif", outline: "none", boxSizing: "border-box" }} />
-          </div>
-          <div>
-            <div style={{ fontSize: 11, fontWeight: 600, color: "#aaa", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Password</div>
-            <div style={{ position: "relative" }}>
-              <input value={loginPassword} onChange={e => setLoginPassword(e.target.value)} placeholder="Enter your password" type={showPassword ? "text" : "password"}
-                onKeyDown={e => { if (e.key === "Enter") handleLogin(); }}
-                style={{ width: "100%", background: "#f9f9f9", border: "0.5px solid #ddd", borderRadius: 10, padding: "12px 44px 12px 14px", fontSize: 15, color: "#111", fontFamily: "'DM Sans',sans-serif", outline: "none", boxSizing: "border-box" }} />
-              <button onClick={() => setShowPassword(!showPassword)} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", fontSize: 16, color: "#aaa" }}>
-                {showPassword ? "🙈" : "👁️"}
-              </button>
-            </div>
-          </div>
-          {loginError && <div style={{ background: "#FCEBEB", color: "#A32D2D", padding: "10px 14px", borderRadius: 8, fontSize: 13, fontWeight: 500 }}>⚠️ {loginError}</div>}
-          <button onClick={handleLogin} disabled={loginLoading} style={{ width: "100%", padding: 14, borderRadius: 12, border: "none", background: "#185FA5", color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", marginTop: 4, opacity: loginLoading ? 0.7 : 1 }}>
-            {loginLoading ? "Signing in..." : "🔐 Sign In"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
- 
-  if (loading) return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: "#f5f5f5", flexDirection: "column", gap: 16, fontFamily: "'DM Sans',sans-serif" }}>
-      <div style={{ fontSize: 40 }}>⚡</div>
-      <div style={{ fontSize: 16, fontWeight: 600, color: "#111" }}>Loading your tasks...</div>
-      <div style={{ fontSize: 13, color: "#aaa" }}>Syncing from database</div>
-    </div>
-  );
- 
-  // ─── MAIN RENDER ───────────────────────────────────────────────────────────
   const totalTasks = tasks.length;
   const doneTasks = tasks.filter(t => t.done).length;
   const pct = totalTasks ? Math.round(doneTasks / totalTasks * 100) : 0;
   const sheetItem = sheet ? getItem(tasks, sheet.itemId) : null;
   const attCount = sheetItem ? countAtt(sheetItem) : 0;
   const S = styles;
+ 
+  if (loading) return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: "#f5f5f5", flexDirection: "column", gap: 16, fontFamily: "'DM Sans',sans-serif" }}>
+      <div style={{ fontSize: 40 }}>⚡</div>
+      <div style={{ fontSize: 16, fontWeight: 600, color: "#111" }}>Loading your tasks...</div>
+    </div>
+  );
  
   return (
     <div style={S.page}>
@@ -516,7 +444,6 @@ export default function App() {
         <button style={S.mainAddBtn} onClick={() => openAddModal("task")}>+ Add task</button>
       </div>
  
-      {/* BULB SHEET */}
       {sheet && (
         <div style={S.overlay} onClick={() => { setSheet(null); setShowPicOptions(false); setImages([]); }}>
           <div style={S.sheetBox} onClick={e => e.stopPropagation()}>
@@ -614,7 +541,6 @@ export default function App() {
         </div>
       )}
  
-      {/* SETTINGS */}
       {showSettings && !logView && (
         <div style={S.overlay} onClick={() => setShowSettings(false)}>
           <div style={S.sheetBox} onClick={e => e.stopPropagation()}>
@@ -625,24 +551,19 @@ export default function App() {
             </div>
             <div style={{ padding: "0 16px 32px", display: "flex", flexDirection: "column", gap: 12 }}>
               <div onClick={saveToLogbook} style={{ display: "flex", alignItems: "center", gap: 12, padding: 16, borderRadius: 14, background: "#E6F1FB", border: "0.5px solid #93C5FD", cursor: "pointer" }}>
-                <div style={{ width: 40, height: 40, borderRadius: "50%", background: "#185FA5", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>💾</div>
+                <div style={{ width: 40, height: 40, borderRadius: "50%", background: "#185FA5", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>💾</div>
                 <div style={{ flex: 1 }}><div style={{ fontSize: 14, fontWeight: 700, color: "#185FA5" }}>Save Current Work</div><div style={{ fontSize: 11, color: "#5B8BC9", marginTop: 2 }}>Save all tasks to Logbook</div></div>
               </div>
               <div onClick={() => setLogView("list")} style={{ display: "flex", alignItems: "center", gap: 12, padding: 16, borderRadius: 14, background: "#FAEEDA", border: "0.5px solid #E5A832", cursor: "pointer" }}>
-                <div style={{ width: 40, height: 40, borderRadius: "50%", background: "#BA7517", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>📖</div>
-                <div style={{ flex: 1 }}><div style={{ fontSize: 14, fontWeight: 700, color: "#BA7517" }}>Logbook</div><div style={{ fontSize: 11, color: "#B07A2A", marginTop: 2 }}>{logbook.length > 0 ? `${logbook.length} save(s) stored` : "No saves yet"}</div></div>
+                <div style={{ width: 40, height: 40, borderRadius: "50%", background: "#BA7517", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>📖</div>
+                <div style={{ flex: 1 }}><div style={{ fontSize: 14, fontWeight: 700, color: "#BA7517" }}>Logbook</div><div style={{ fontSize: 11, color: "#B07A2A", marginTop: 2 }}>{logbook.length > 0 ? `${logbook.length} save(s)` : "No saves yet"}</div></div>
                 <span style={{ color: "#ccc" }}>›</span>
-              </div>
-              <div onClick={handleLogout} style={{ display: "flex", alignItems: "center", gap: 12, padding: 16, borderRadius: 14, background: "#FCEBEB", border: "0.5px solid #FECACA", cursor: "pointer" }}>
-                <div style={{ width: 40, height: 40, borderRadius: "50%", background: "#A32D2D", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>🚪</div>
-                <div style={{ flex: 1 }}><div style={{ fontSize: 14, fontWeight: 700, color: "#A32D2D" }}>Log Out</div><div style={{ fontSize: 11, color: "#C87272", marginTop: 2 }}>Sign out of your account</div></div>
               </div>
             </div>
           </div>
         </div>
       )}
  
-      {/* LOGBOOK LIST */}
       {showSettings && logView === "list" && (
         <div style={S.overlay} onClick={() => { setShowSettings(false); setLogView(null); }}>
           <div style={S.sheetBox} onClick={e => e.stopPropagation()}>
@@ -654,7 +575,7 @@ export default function App() {
             <div style={{ padding: "0 16px 32px", overflowY: "auto" }}>
               <button style={S.backBtn} onClick={() => setLogView(null)}>← Back</button>
               {logbook.length === 0
-                ? <div style={{ textAlign: "center", padding: "32px 0", color: "#999", fontSize: 13 }}>No saves yet. Press 💾 Save to create your first backup!</div>
+                ? <div style={{ textAlign: "center", padding: "32px 0", color: "#999", fontSize: 13 }}>No saves yet!</div>
                 : logbook.map((entry, i) => (
                   <div key={entry.id} onClick={() => setLogView(entry)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 12px", borderRadius: 12, background: i === 0 ? "#E6F1FB" : "#f9f9f9", border: `0.5px solid ${i === 0 ? "#93C5FD" : "#eee"}`, marginBottom: 8, cursor: "pointer" }}>
                     <div>
@@ -670,7 +591,6 @@ export default function App() {
         </div>
       )}
  
-      {/* LOGBOOK ENTRY */}
       {showSettings && logView && logView !== "list" && (
         <div style={S.overlay} onClick={() => { setShowSettings(false); setLogView(null); }}>
           <div style={S.sheetBox} onClick={e => e.stopPropagation()}>
@@ -682,19 +602,18 @@ export default function App() {
             <div style={{ padding: "0 16px 32px", overflowY: "auto" }}>
               <button style={S.backBtn} onClick={() => setLogView("list")}>← Back</button>
               <div onClick={() => {
-                if (window.confirm(`Restore save from ${logView.date} at ${logView.time}? Your current tasks will be replaced.`)) {
+                if (window.confirm(`Restore this version?`)) {
                   const restored = JSON.parse(JSON.stringify(logView.tasks));
                   setTasks(restored);
                   localStorage.setItem("command_centre_tasks", JSON.stringify(restored));
                   supabase.from("tasks").upsert({ id: DB_ID, data: JSON.stringify(restored) }).catch(() => {});
                   setShowSettings(false); setLogView(null);
-                  alert("✅ Restored successfully!");
+                  alert("✅ Restored!");
                 }
               }} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px 16px", borderRadius: 12, background: "#E1F5EE", border: "0.5px solid #1D9E75", cursor: "pointer", marginBottom: 14 }}>
                 <span style={{ fontSize: 16 }}>♻️</span>
                 <span style={{ fontSize: 13, fontWeight: 700, color: "#085041" }}>Restore This Version</span>
               </div>
-              <div style={{ fontSize: 11, color: "#aaa", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>{logView.tasks.length} task(s)</div>
               {logView.tasks.map((task, i) => (
                 <div key={i} style={{ marginBottom: 10, background: "#f9f9f9", borderRadius: 10, padding: "10px 12px", border: "0.5px solid #eee" }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: "#111" }}>{task.num}. {task.name}</div>
@@ -708,7 +627,6 @@ export default function App() {
                       ))}
                     </div>
                   ))}
-                  {countAtt(task) > 0 && <div style={{ fontSize: 10, color: "#BA7517", marginTop: 6 }}>💡 {countAtt(task)} attachment(s)</div>}
                 </div>
               ))}
             </div>
@@ -769,7 +687,7 @@ export default function App() {
               <input value={addModal.url} onChange={e => setAddModal(m => ({ ...m, url: e.target.value }))} placeholder="https://..."
                 style={{ width: "100%", background: "#f9f9f9", border: "0.5px solid #eee", borderRadius: 10, padding: "10px 12px", fontSize: 13, color: "#111", fontFamily: "'DM Sans',sans-serif", outline: "none", boxSizing: "border-box" }} />
             </div>
-            <button onClick={confirmAdd} style={{ width: "100%", padding: 14, borderRadius: 12, border: "none", background: addModal.value.trim() ? "#185FA5" : "#ddd", color: addModal.value.trim() ? "#fff" : "#aaa", fontSize: 15, fontWeight: 700, cursor: addModal.value.trim() ? "pointer" : "default", fontFamily: "'DM Sans',sans-serif", transition: "background .2s" }}>✓ Done</button>
+            <button onClick={confirmAdd} style={{ width: "100%", padding: 14, borderRadius: 12, border: "none", background: addModal.value.trim() ? "#185FA5" : "#ddd", color: addModal.value.trim() ? "#fff" : "#aaa", fontSize: 15, fontWeight: 700, cursor: addModal.value.trim() ? "pointer" : "default", fontFamily: "'DM Sans',sans-serif" }}>✓ Done</button>
           </div>
         </div>
       )}
