@@ -618,7 +618,7 @@ export default function App() {
                   const restored = JSON.parse(JSON.stringify(logView.tasks));
                   setTasks(restored);
                   localStorage.setItem("command_centre_tasks", JSON.stringify(restored));
-                  try { await supabase.from("tasks").upsert({ id: DB_ID, data: JSON.stringify(restored) }); } catch (e) {}
+                  supabase.from("tasks").upsert({ id: DB_ID, data: JSON.stringify(restored) });
                   setShowSettings(false); setLogView(null);
                   alert("✅ Restored!");
                 }
