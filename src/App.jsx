@@ -378,6 +378,15 @@ export default function App() {
   const [fullImg, setFullImg] = useState(null);
   const [logbook, setLogbook] = useState([]);
   const [logView, setLogView] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const toastTimer = useRef(null);
+  const cameraRef = useRef(null);
+  const galleryRef = useRef(null);
+  const modalCameraRef = useRef(null);
+  const modalGalleryRef = useRef(null);
+  const taskListRef = useRef([]);
+  const subListRefs = useRef({});
+  const ssubListRefs = useRef({});
  
   // Load logbook from Supabase on startup
   useEffect(() => {
@@ -416,19 +425,7 @@ export default function App() {
       alert("✅ Saved locally! Will sync when online.");
     }
   };
-  const [loading, setLoading] = useState(true);
-  const toastTimer = useRef(null);
-  const cameraRef = useRef(null);
-  const galleryRef = useRef(null);
-  const modalCameraRef = useRef(null);
-  const modalGalleryRef = useRef(null);
- 
-  // drag list refs — stable, not recreated on render
-  const taskListRef = useRef([]);
-  const subListRefs = useRef({});   // keyed by taskId
-  const ssubListRefs = useRef({});  // keyed by subId
- 
-  const getSubListRef = (taskId) => {
+  // Load logbook from Supabase on startup  const getSubListRef = (taskId) => {
     if (!subListRefs.current[taskId]) subListRefs.current[taskId] = [];
     return subListRefs.current[taskId];
   };
