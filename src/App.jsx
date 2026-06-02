@@ -212,21 +212,9 @@ export default function App() {
     load();
   }, []);
  
-  // Load logbook - localStorage always wins
+  // Load logbook - always from Supabase first, localStorage as fallback
   useEffect(() => {
     const loadLogbook = async () => {
-      // Always load localStorage first
-      try {
-        const l = localStorage.getItem("command_centre_logbook");
-        if (l) {
-          const parsed = JSON.parse(l);
-          if (parsed.length > 0) {
-            setLogbook(parsed);
-            return; // localStorage has data — use it, don't check Supabase
-          }
-        }
-      } catch (e) {}
-      // Only check Supabase if localStorage is empty
       try {
         const { data } = await supabase.from("tasks").select("data").eq("id", 2).single();
         if (data && data.data) {
@@ -234,8 +222,14 @@ export default function App() {
           if (parsed.length > 0) {
             setLogbook(parsed);
             localStorage.setItem("command_centre_logbook", data.data);
+            return;
           }
         }
+      } catch (e) {}
+      // fallback to localStorage
+      try {
+        const l = localStorage.getItem("command_centre_logbook");
+        if (l) { const parsed = JSON.parse(l); if (parsed.length > 0) setLogbook(parsed); }
       } catch (e) {}
     };
     loadLogbook();
