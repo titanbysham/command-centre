@@ -279,6 +279,7 @@ function SheetOption({ icon, title, sub, color, onClick }) {
  
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function App() {
+  // ALL hooks must be declared first before any returns
   const [session, setSession] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [loginEmail, setLoginEmail] = useState("");
@@ -286,6 +287,31 @@ export default function App() {
   const [loginError, setLoginError] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [tasks, setTasks] = useState(() => {
+    try { const local = localStorage.getItem("command_centre_tasks"); if (local) return JSON.parse(local); } catch (e) {}
+    return [];
+  });
+  const [sheet, setSheet] = useState(null);
+  const [urlInput, setUrlInput] = useState("");
+  const [noteInput, setNoteInput] = useState("");
+  const [images, setImages] = useState([]);
+  const [showPicOptions, setShowPicOptions] = useState(false);
+  const [toast, setToast] = useState({ show: false, name: "", id: null, resetFn: null });
+  const [addModal, setAddModal] = useState({ show: false, type: "task", taskId: null, subId: null, value: "", url: "", images: [], showPicOpts: false });
+  const [editModal, setEditModal] = useState({ show: false, id: null, value: "" });
+  const [showSettings, setShowSettings] = useState(false);
+  const [fullImg, setFullImg] = useState(null);
+  const [logbook, setLogbook] = useState([]);
+  const [logView, setLogView] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const toastTimer = useRef(null);
+  const cameraRef = useRef(null);
+  const galleryRef = useRef(null);
+  const modalCameraRef = useRef(null);
+  const modalGalleryRef = useRef(null);
+  const taskListRef = useRef([]);
+  const subListRefs = useRef({});
+  const ssubListRefs = useRef({});
  
   // Check if already logged in
   useEffect(() => {
@@ -313,80 +339,6 @@ export default function App() {
       setSession(null);
     }
   };
- 
-  // Show loading while checking auth
-  if (authLoading) return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: "#f5f5f5", flexDirection: "column", gap: 16, fontFamily: "'DM Sans',sans-serif" }}>
-      <div style={{ fontSize: 40 }}>⚡</div>
-      <div style={{ fontSize: 16, fontWeight: 600, color: "#111" }}>Loading...</div>
-    </div>
-  );
- 
-  // Show login screen if not logged in
-  if (!session) return (
-    <div style={{ minHeight: "100vh", background: "#f5f5f5", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "'DM Sans',sans-serif" }}>
-      <div style={{ background: "#fff", borderRadius: 24, padding: "36px 24px", width: "100%", maxWidth: 360, boxShadow: "0 12px 48px rgba(0,0,0,0.1)" }}>
-        <div style={{ textAlign: "center", marginBottom: 28 }}>
-          <div style={{ fontSize: 48, marginBottom: 12 }}>⚡</div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: "#111" }}>Command Centre</div>
-          <div style={{ fontSize: 13, color: "#888", marginTop: 6 }}>Sign in to access your tasks</div>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <div>
-            <div style={{ fontSize: 11, fontWeight: 600, color: "#aaa", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Email</div>
-            <input value={loginEmail} onChange={e => setLoginEmail(e.target.value)}
-              placeholder="your@email.com" type="email"
-              style={{ width: "100%", background: "#f9f9f9", border: "0.5px solid #ddd", borderRadius: 10, padding: "12px 14px", fontSize: 15, color: "#111", fontFamily: "'DM Sans',sans-serif", outline: "none", boxSizing: "border-box" }} />
-          </div>
-          <div>
-            <div style={{ fontSize: 11, fontWeight: 600, color: "#aaa", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Password</div>
-            <div style={{ position: "relative" }}>
-              <input value={loginPassword} onChange={e => setLoginPassword(e.target.value)}
-                placeholder="Enter your password" type={showPassword ? "text" : "password"}
-                onKeyDown={e => { if (e.key === "Enter") handleLogin(); }}
-                style={{ width: "100%", background: "#f9f9f9", border: "0.5px solid #ddd", borderRadius: 10, padding: "12px 44px 12px 14px", fontSize: 15, color: "#111", fontFamily: "'DM Sans',sans-serif", outline: "none", boxSizing: "border-box" }} />
-              <button onClick={() => setShowPassword(!showPassword)} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", fontSize: 16, color: "#aaa" }}>
-                {showPassword ? "🙈" : "👁️"}
-              </button>
-            </div>
-          </div>
-          {loginError && <div style={{ background: "#FCEBEB", color: "#A32D2D", padding: "10px 14px", borderRadius: 8, fontSize: 13, fontWeight: 500 }}>⚠️ {loginError}</div>}
-          <button onClick={handleLogin} disabled={loginLoading} style={{ width: "100%", padding: 14, borderRadius: 12, border: "none", background: "#185FA5", color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", marginTop: 4, opacity: loginLoading ? 0.7 : 1 }}>
-            {loginLoading ? "Signing in..." : "🔐 Sign In"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-  // Load from localStorage instantly as first render
-  const [tasks, setTasks] = useState(() => {
-    try {
-      const local = localStorage.getItem("command_centre_tasks");
-      if (local) return JSON.parse(local);
-    } catch (e) {}
-    return []; // empty array — wait for Supabase to load
-  });
-  const [sheet, setSheet] = useState(null);
-  const [urlInput, setUrlInput] = useState("");
-  const [noteInput, setNoteInput] = useState("");
-  const [images, setImages] = useState([]);
-  const [showPicOptions, setShowPicOptions] = useState(false);
-  const [toast, setToast] = useState({ show: false, name: "", id: null, resetFn: null });
-  const [addModal, setAddModal] = useState({ show: false, type: "task", taskId: null, subId: null, value: "", url: "", images: [], showPicOpts: false });
-  const [editModal, setEditModal] = useState({ show: false, id: null, value: "" });
-  const [showSettings, setShowSettings] = useState(false);
-  const [fullImg, setFullImg] = useState(null);
-  const [logbook, setLogbook] = useState([]);
-  const [logView, setLogView] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const toastTimer = useRef(null);
-  const cameraRef = useRef(null);
-  const galleryRef = useRef(null);
-  const modalCameraRef = useRef(null);
-  const modalGalleryRef = useRef(null);
-  const taskListRef = useRef([]);
-  const subListRefs = useRef({});
-  const ssubListRefs = useRef({});
  
   // Load logbook from Supabase on startup
   useEffect(() => {
@@ -583,6 +535,48 @@ export default function App() {
   const sheetItem = sheet ? getItem(tasks, sheet.itemId) : null;
   const attCount = sheetItem ? countAtt(sheetItem) : 0;
   const S = styles;
+ 
+  // Early returns AFTER all hooks
+  if (authLoading) return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: "#f5f5f5", flexDirection: "column", gap: 16, fontFamily: "'DM Sans',sans-serif" }}>
+      <div style={{ fontSize: 40 }}>⚡</div>
+      <div style={{ fontSize: 16, fontWeight: 600, color: "#111" }}>Loading...</div>
+    </div>
+  );
+ 
+  if (!session) return (
+    <div style={{ minHeight: "100vh", background: "#f5f5f5", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "'DM Sans',sans-serif" }}>
+      <div style={{ background: "#fff", borderRadius: 24, padding: "36px 24px", width: "100%", maxWidth: 360, boxShadow: "0 12px 48px rgba(0,0,0,0.1)" }}>
+        <div style={{ textAlign: "center", marginBottom: 28 }}>
+          <div style={{ fontSize: 48, marginBottom: 12 }}>⚡</div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: "#111" }}>Command Centre</div>
+          <div style={{ fontSize: 13, color: "#888", marginTop: 6 }}>Sign in to access your tasks</div>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: "#aaa", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Email</div>
+            <input value={loginEmail} onChange={e => setLoginEmail(e.target.value)} placeholder="your@email.com" type="email"
+              style={{ width: "100%", background: "#f9f9f9", border: "0.5px solid #ddd", borderRadius: 10, padding: "12px 14px", fontSize: 15, color: "#111", fontFamily: "'DM Sans',sans-serif", outline: "none", boxSizing: "border-box" }} />
+          </div>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: "#aaa", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Password</div>
+            <div style={{ position: "relative" }}>
+              <input value={loginPassword} onChange={e => setLoginPassword(e.target.value)} placeholder="Enter your password" type={showPassword ? "text" : "password"}
+                onKeyDown={e => { if (e.key === "Enter") handleLogin(); }}
+                style={{ width: "100%", background: "#f9f9f9", border: "0.5px solid #ddd", borderRadius: 10, padding: "12px 44px 12px 14px", fontSize: 15, color: "#111", fontFamily: "'DM Sans',sans-serif", outline: "none", boxSizing: "border-box" }} />
+              <button onClick={() => setShowPassword(!showPassword)} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", fontSize: 16, color: "#aaa" }}>
+                {showPassword ? "🙈" : "👁️"}
+              </button>
+            </div>
+          </div>
+          {loginError && <div style={{ background: "#FCEBEB", color: "#A32D2D", padding: "10px 14px", borderRadius: 8, fontSize: 13, fontWeight: 500 }}>⚠️ {loginError}</div>}
+          <button onClick={handleLogin} disabled={loginLoading} style={{ width: "100%", padding: 14, borderRadius: 12, border: "none", background: "#185FA5", color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", marginTop: 4, opacity: loginLoading ? 0.7 : 1 }}>
+            {loginLoading ? "Signing in..." : "🔐 Sign In"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
  
   if (loading) return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: "#f5f5f5", flexDirection: "column", gap: 16, fontFamily: "'DM Sans',sans-serif" }}>
