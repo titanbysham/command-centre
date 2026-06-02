@@ -416,7 +416,7 @@ export default function App() {
       alert("✅ Saved locally! Will sync when online.");
     }
   };
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const toastTimer = useRef(null);
   const cameraRef = useRef(null);
   const galleryRef = useRef(null);
@@ -586,6 +586,14 @@ export default function App() {
   const sheetItem = sheet ? getItem(tasks, sheet.itemId) : null;
   const attCount = sheetItem ? countAtt(sheetItem) : 0;
   const S = styles;
+ 
+  if (loading) return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: "#f5f5f5", flexDirection: "column", gap: 16, fontFamily: "'DM Sans',sans-serif" }}>
+      <div style={{ fontSize: 40 }}>⚡</div>
+      <div style={{ fontSize: 16, fontWeight: 600, color: "#111" }}>Loading your tasks...</div>
+      <div style={{ fontSize: 13, color: "#aaa" }}>Syncing from database</div>
+    </div>
+  );
  
   return (
     <div style={S.page}>
