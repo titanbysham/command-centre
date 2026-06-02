@@ -212,11 +212,19 @@ export default function App() {
   useEffect(() => {
     if (!session) return;
     const load = async () => {
+      // First load from localStorage instantly
+      try {
+        const local = localStorage.getItem("command_centre_tasks");
+        if (local) { const parsed = JSON.parse(local); if (parsed.length > 0) setTasks(parsed); }
+      } catch (e) {}
+      // Then try Supabase
       try {
         const { data } = await supabase.from("tasks").select("data").eq("id", DB_ID).single();
-        if (data && data.data) { const parsed = JSON.parse(data.data); setTasks(parsed); localStorage.setItem("command_centre_tasks", data.data); }
-        else { const local = localStorage.getItem("command_centre_tasks"); if (local) setTasks(JSON.parse(local)); }
-      } catch (e) { const local = localStorage.getItem("command_centre_tasks"); if (local) setTasks(JSON.parse(local)); }
+        if (data && data.data) {
+          const parsed = JSON.parse(data.data);
+          if (parsed.length > 0) { setTasks(parsed); localStorage.setItem("command_centre_tasks", data.data); }
+        }
+      } catch (e) { console.log("Offline or no data in Supabase"); }
       setLoading(false);
     };
     load();
