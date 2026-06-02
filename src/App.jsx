@@ -264,10 +264,13 @@ export default function App() {
     setLogbook(updated);
     localStorage.setItem("command_centre_logbook", JSON.stringify(updated));
     try {
-      await supabase.from("tasks").upsert({ id: 2, data: JSON.stringify(updated) });
-      await supabase.from("tasks").upsert({ id: DB_ID, data: JSON.stringify(tasks) });
-      alert("✅ Saved to Logbook!");
-    } catch (e) { alert("✅ Saved locally!"); }
+      const { error } = await supabase.from("tasks").upsert({ id: 2, data: JSON.stringify(updated) });
+      if (error) { alert("❌ Error: " + error.message); }
+      else {
+        await supabase.from("tasks").upsert({ id: DB_ID, data: JSON.stringify(tasks) });
+        alert("✅ Saved to Logbook!");
+      }
+    } catch (e) { alert("❌ Failed: " + e.message); }
   };
  
   const toggleTask = id => update(t => { const x = t.find(x => x.id === id); if (x) x.open = !x.open; });
@@ -783,3 +786,4 @@ const styles = {
   noteCard: { background: "#f9f9f9", borderRadius: 8, padding: "10px 12px", fontSize: 13, color: "#111", lineHeight: 1.5 },
   delBtn: { position: "absolute", top: 6, right: 6, width: 18, height: 18, borderRadius: "50%", background: "#FCEBEB", border: "none", cursor: "pointer", fontSize: 10, color: "#A32D2D" },
 };
+ 
