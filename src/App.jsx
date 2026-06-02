@@ -358,13 +358,13 @@ export default function App() {
       </div>
     </div>
   );
-  // Load from localStorage instantly — no loading screen needed
+  // Load from localStorage instantly as first render
   const [tasks, setTasks] = useState(() => {
     try {
       const local = localStorage.getItem("command_centre_tasks");
       if (local) return JSON.parse(local);
     } catch (e) {}
-    return initialTasks;
+    return []; // empty array — wait for Supabase to load
   });
   const [sheet, setSheet] = useState(null);
   const [urlInput, setUrlInput] = useState("");
@@ -376,12 +376,27 @@ export default function App() {
   const [editModal, setEditModal] = useState({ show: false, id: null, value: "" });
   const [showSettings, setShowSettings] = useState(false);
   const [fullImg, setFullImg] = useState(null);
-  const [logbook, setLogbook] = useState(() => {
-    try { const l = localStorage.getItem("command_centre_logbook"); return l ? JSON.parse(l) : []; } catch (e) { return []; }
-  });
-  const [logView, setLogView] = useState(null); // null or a logbook entry
+  const [logbook, setLogbook] = useState([]);
+  const [logView, setLogView] = useState(null);
  
-  const saveToLogbook = () => {
+  // Load logbook from Supabase on startup
+  useEffect(() => {
+    const loadLogbook = async () => {
+      try {
+        const { data } = await supabase.from("tasks").select("data").eq("id", 2).single();
+        if (data && data.data) setLogbook(JSON.parse(data.data));
+      } catch (e) {
+        // try localStorage as fallback
+        try {
+          const l = localStorage.getItem("command_centre_logbook");
+          if (l) setLogbook(JSON.parse(l));
+        } catch (e2) {}
+      }
+    };
+    loadLogbook();
+  }, []);
+ 
+  const saveToLogbook = async () => {
     const entry = {
       id: Date.now(),
       date: new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }),
@@ -390,10 +405,16 @@ export default function App() {
     };
     const updated = [entry, ...logbook].slice(0, 10);
     setLogbook(updated);
+    // save logbook to Supabase (id=2) and localStorage
     localStorage.setItem("command_centre_logbook", JSON.stringify(updated));
-    // also save to Supabase logbook
-    supabase.from("tasks").upsert({ id: 2, data: JSON.stringify(updated) }).catch(() => {});
-    alert("✅ Saved to Logbook!");
+    try {
+      await supabase.from("tasks").upsert({ id: 2, data: JSON.stringify(updated) });
+      // also make sure current tasks are synced to Supabase (id=1)
+      await supabase.from("tasks").upsert({ id: DB_ID, data: JSON.stringify(tasks) });
+      alert("✅ Saved to Logbook and synced!");
+    } catch (e) {
+      alert("✅ Saved locally! Will sync when online.");
+    }
   };
   const [loading, setLoading] = useState(false);
   const toastTimer = useRef(null);
@@ -418,24 +439,19 @@ export default function App() {
  
   const update = fn => setTasks(prev => { const next = JSON.parse(JSON.stringify(prev)); fn(next); return next; });
  
-  // When internet comes back — push local data TO Supabase (local always wins)
+  // Always load from Supabase on startup — ensures browser and PWA show same data
   useEffect(() => {
     const sync = async () => {
       try {
-        const local = localStorage.getItem("command_centre_tasks");
-        if (local) {
-          // push local data to Supabase — local always wins
-          await supabase.from("tasks").upsert({ id: DB_ID, data: local });
-        } else {
-          // no local data — pull from Supabase
-          const { data } = await supabase.from("tasks").select("data").eq("id", DB_ID).single();
-          if (data && data.data) {
-            setTasks(JSON.parse(data.data));
-            localStorage.setItem("command_centre_tasks", data.data);
-          }
+        const { data } = await supabase.from("tasks").select("data").eq("id", DB_ID).single();
+        if (data && data.data) {
+          const parsed = JSON.parse(data.data);
+          setTasks(parsed);
+          localStorage.setItem("command_centre_tasks", data.data);
         }
       } catch (e) {
-        // offline — no action needed, localStorage already loaded
+        // offline — localStorage already loaded above
+        console.log("Offline — using local data");
       }
       setLoading(false);
     };
@@ -821,6 +837,11 @@ export default function App() {
                   <div style={{ fontSize: 11, color: "#C87272", marginTop: 2 }}>Sign out of your account</div>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+ 
       {showSettings && logView === "list" && (
         <div style={S.overlay} onClick={() => { setShowSettings(false); setLogView(null); }}>
           <div style={S.sheetBox} onClick={e => e.stopPropagation()}>
