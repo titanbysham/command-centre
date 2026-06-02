@@ -279,6 +279,85 @@ function SheetOption({ icon, title, sub, color, onClick }) {
  
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function App() {
+  const [session, setSession] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+ 
+  // Check if already logged in
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setAuthLoading(false);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+ 
+  const handleLogin = async () => {
+    if (!loginEmail.trim() || !loginPassword.trim()) { setLoginError("Please enter email and password"); return; }
+    setLoginLoading(true); setLoginError("");
+    const { error } = await supabase.auth.signInWithPassword({ email: loginEmail, password: loginPassword });
+    if (error) setLoginError("Wrong email or password. Try again!");
+    setLoginLoading(false);
+  };
+ 
+  const handleLogout = async () => {
+    if (window.confirm("Are you sure you want to log out?")) {
+      await supabase.auth.signOut();
+      setSession(null);
+    }
+  };
+ 
+  // Show loading while checking auth
+  if (authLoading) return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: "#f5f5f5", flexDirection: "column", gap: 16, fontFamily: "'DM Sans',sans-serif" }}>
+      <div style={{ fontSize: 40 }}>⚡</div>
+      <div style={{ fontSize: 16, fontWeight: 600, color: "#111" }}>Loading...</div>
+    </div>
+  );
+ 
+  // Show login screen if not logged in
+  if (!session) return (
+    <div style={{ minHeight: "100vh", background: "#f5f5f5", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "'DM Sans',sans-serif" }}>
+      <div style={{ background: "#fff", borderRadius: 24, padding: "36px 24px", width: "100%", maxWidth: 360, boxShadow: "0 12px 48px rgba(0,0,0,0.1)" }}>
+        <div style={{ textAlign: "center", marginBottom: 28 }}>
+          <div style={{ fontSize: 48, marginBottom: 12 }}>⚡</div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: "#111" }}>Command Centre</div>
+          <div style={{ fontSize: 13, color: "#888", marginTop: 6 }}>Sign in to access your tasks</div>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: "#aaa", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Email</div>
+            <input value={loginEmail} onChange={e => setLoginEmail(e.target.value)}
+              placeholder="your@email.com" type="email"
+              style={{ width: "100%", background: "#f9f9f9", border: "0.5px solid #ddd", borderRadius: 10, padding: "12px 14px", fontSize: 15, color: "#111", fontFamily: "'DM Sans',sans-serif", outline: "none", boxSizing: "border-box" }} />
+          </div>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: "#aaa", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Password</div>
+            <div style={{ position: "relative" }}>
+              <input value={loginPassword} onChange={e => setLoginPassword(e.target.value)}
+                placeholder="Enter your password" type={showPassword ? "text" : "password"}
+                onKeyDown={e => { if (e.key === "Enter") handleLogin(); }}
+                style={{ width: "100%", background: "#f9f9f9", border: "0.5px solid #ddd", borderRadius: 10, padding: "12px 44px 12px 14px", fontSize: 15, color: "#111", fontFamily: "'DM Sans',sans-serif", outline: "none", boxSizing: "border-box" }} />
+              <button onClick={() => setShowPassword(!showPassword)} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", fontSize: 16, color: "#aaa" }}>
+                {showPassword ? "🙈" : "👁️"}
+              </button>
+            </div>
+          </div>
+          {loginError && <div style={{ background: "#FCEBEB", color: "#A32D2D", padding: "10px 14px", borderRadius: 8, fontSize: 13, fontWeight: 500 }}>⚠️ {loginError}</div>}
+          <button onClick={handleLogin} disabled={loginLoading} style={{ width: "100%", padding: 14, borderRadius: 12, border: "none", background: "#185FA5", color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", marginTop: 4, opacity: loginLoading ? 0.7 : 1 }}>
+            {loginLoading ? "Signing in..." : "🔐 Sign In"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
   // Load from localStorage instantly — no loading screen needed
   const [tasks, setTasks] = useState(() => {
     try {
@@ -734,12 +813,14 @@ export default function App() {
                 </div>
                 <span style={{ color: "#ccc" }}>›</span>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
- 
-      {/* LOGBOOK LIST */}
+              {/* LOGOUT BUTTON */}
+              <div onClick={handleLogout} style={{ display: "flex", alignItems: "center", gap: 12, padding: 16, borderRadius: 14, background: "#FCEBEB", border: "0.5px solid #FECACA", cursor: "pointer" }}>
+                <div style={{ width: 40, height: 40, borderRadius: "50%", background: "#A32D2D", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>🚪</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "#A32D2D" }}>Log Out</div>
+                  <div style={{ fontSize: 11, color: "#C87272", marginTop: 2 }}>Sign out of your account</div>
+                </div>
+              </div>
       {showSettings && logView === "list" && (
         <div style={S.overlay} onClick={() => { setShowSettings(false); setLogView(null); }}>
           <div style={S.sheetBox} onClick={e => e.stopPropagation()}>
@@ -947,4 +1028,3 @@ const styles = {
   noteCard: { background: "#f9f9f9", borderRadius: 8, padding: "10px 12px", fontSize: 13, color: "#111", lineHeight: 1.5 },
   delBtn: { position: "absolute", top: 6, right: 6, width: 18, height: 18, borderRadius: "50%", background: "#FCEBEB", border: "none", cursor: "pointer", fontSize: 10, color: "#A32D2D" },
 };
- 
