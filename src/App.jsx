@@ -234,9 +234,9 @@ export default function App() {
     loadLogbook();
   }, [session]);
  
-  // Save tasks
+  // Save tasks - only when tasks actually have data
   useEffect(() => {
-    if (loading || !session) return;
+    if (loading || !session || tasks.length === 0) return;
     const tasksJson = JSON.stringify(tasks);
     localStorage.setItem("command_centre_tasks", tasksJson);
     supabase.from("tasks").upsert({ id: DB_ID, data: tasksJson }).catch(() => {});
